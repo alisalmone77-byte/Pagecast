@@ -28,6 +28,25 @@ export const config = {
   },
   /** How many chunks are synthesised at once. */
   synthesisConcurrency: Number(env('PAGECAST_SYNTHESIS_CONCURRENCY', '2')),
+  auth: {
+    /**
+     * Whether new accounts can be created. Left on by default because this is
+     * a self-hosted reading app and the first thing anyone does is sign up;
+     * turn it off once your household has accounts.
+     */
+    allowRegistration: env('PAGECAST_ALLOW_REGISTRATION', 'true') !== 'false',
+    /**
+     * When set, registration also requires this code. Useful for a server on a
+     * public address that should not be open to the world.
+     */
+    invitationCode: env('PAGECAST_INVITE_CODE', ''),
+    /**
+     * Add `Secure` to the session cookie. Must be on behind HTTPS; must be off
+     * for a plain-http development server or the browser silently drops the
+     * cookie and every request looks signed out.
+     */
+    secureCookies: env('PAGECAST_SECURE_COOKIES', 'false') === 'true',
+  },
 } as const;
 
 export const paths = {
@@ -42,4 +61,7 @@ export const paths = {
     path.join(config.dataDir, 'state', userId, `${documentId}.json`),
   highlights: (userId: string, documentId: string) =>
     path.join(config.dataDir, 'highlights', userId, `${documentId}.json`),
+  users: () => path.join(config.dataDir, 'users.json'),
+  sessions: () => path.join(config.dataDir, 'sessions.json'),
+  folders: (userId: string) => path.join(config.dataDir, 'folders', `${userId}.json`),
 };

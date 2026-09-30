@@ -56,8 +56,15 @@ export class SyncHub {
   private readonly clients = new Set<Client>();
   private heartbeat: NodeJS.Timeout | null = null;
 
-  /** Complete the HTTP upgrade handshake and adopt the socket. */
-  handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+  /**
+   * Complete the HTTP upgrade handshake and adopt the socket.
+   *
+   * `userId` comes from the caller, which has already resolved the session.
+   * It is never read from the query string: this channel carries one reader's
+   * positions to their other devices, and a client-supplied identity would let
+   * anyone subscribe to anyone.
+   */
+  handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer, userId: string): void {
     const key = req.headers['sec-websocket-key'];
     if (typeof key !== 'string' || (req.headers['upgrade'] ?? '').toLowerCase() !== 'websocket') {
       socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
@@ -77,7 +84,7 @@ export class SyncHub {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const client: Client = {
       socket,
-      userId: url.searchParams.get('user') ?? 'local',
+      userId,
       deviceId: url.searchParams.get('device') ?? 'unknown',
       documentIds: new Set(),
       alive: true,

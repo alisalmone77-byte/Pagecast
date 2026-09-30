@@ -16,13 +16,45 @@ const { store } = await import('../dist/store.js');
 
 let server;
 let port;
+let token;
+let strangerToken;
 
 before(async () => {
   await store.init();
   server = createServer();
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   port = server.address().port;
+  token = await register('reader@example.com');
+  strangerToken = await register('mallory@example.com');
 });
+
+async function register(email) {
+  const res = await fetch(`http://127.0.0.1:${port}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password: 'a decent long passphrase' }),
+  });
+  return (await res.json()).token;
+}
+
+/** Ingest a document as a given account. */
+async function ingest(text, title, as = token) {
+  const res = await fetch(`http://127.0.0.1:${port}/api/ingest/text`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${as}` },
+    body: JSON.stringify({ text, title }),
+  });
+  return (await res.json()).meta;
+}
+
+/** Write reading state as a given account. */
+function writeState(id, position, deviceId, as = token) {
+  return fetch(`http://127.0.0.1:${port}/api/sync/state/${id}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${as}` },
+    body: JSON.stringify({ position, rev: 0, deviceId }),
+  });
+}
 
 after(async () => {
   await new Promise((resolve) => server.close(resolve));
@@ -53,7 +85,7 @@ function clientFrame(opcode, payload) {
 }
 
 /** Open a WebSocket by hand and collect decoded server messages. */
-async function connect(query = '') {
+async function connect(query = '', sessionToken = token) {
   const socket = net.connect(port, '127.0.0.1');
   await new Promise((resolve, reject) => {
     socket.once('connect', resolve);
@@ -61,9 +93,10 @@ async function connect(query = '') {
   });
 
   const key = randomBytes(16).toString('base64');
+  const auth = sessionToken ? `Authorization: Bearer ${sessionToken}\r\n` : '';
   socket.write(
     `GET /api/sync/ws${query} HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\n` +
-    `Connection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`,
+    `Connection: Upgrade\r\n${auth}Sec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`,
   );
 
   let buffer = Buffer.alloc(0);
@@ -160,7 +193,7 @@ test('server frames are never masked', () => {
 });
 
 test('the handshake completes with a correct accept key', async () => {
-  const client = await connect('?user=local&device=laptop');
+  const client = await connect('?device=laptop');
   assert.match(client.handshake, /^HTTP\/1\.1 101 /);
 
   const expected = createHash('sha1')
@@ -171,7 +204,7 @@ test('the handshake completes with a correct accept key', async () => {
 });
 
 test('a connecting client is greeted and can subscribe', async () => {
-  const client = await connect('?user=local&device=laptop');
+  const client = await connect('?device=laptop');
   const hello = await client.next();
   assert.equal(hello.type, 'hello');
   assert.equal(hello.deviceId, 'laptop');
@@ -182,22 +215,39 @@ test('a connecting client is greeted and can subscribe', async () => {
   client.close();
 });
 
-test('a position written on one device reaches the other', async () => {
-  const ingest = await fetch(`http://127.0.0.1:${port}/api/ingest/text`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text: 'One two three.\n\nFour five six.\n\nSeven eight nine.', title: 'Handoff' }),
-  });
-  const { meta } = await ingest.json();
+test('an unauthenticated upgrade is refused', async () => {
+  const socket = net.connect(port, '127.0.0.1');
+  await new Promise((resolve) => socket.once('connect', resolve));
+  socket.write(
+    'GET /api/sync/ws?device=nobody HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\n' +
+    `Connection: Upgrade\r\nSec-WebSocket-Key: ${randomBytes(16).toString('base64')}\r\n` +
+    'Sec-WebSocket-Version: 13\r\n\r\n',
+  );
+  const response = await new Promise((resolve) => socket.once('data', (d) => resolve(d.toString())));
+  assert.match(response, /401/);
+  socket.destroy();
+});
 
-  const phone = await connect('?user=local&device=phone');
+test('a bogus session cannot open a socket', async () => {
+  const socket = net.connect(port, '127.0.0.1');
+  await new Promise((resolve) => socket.once('connect', resolve));
+  socket.write(
+    'GET /api/sync/ws HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\n' +
+    'Connection: Upgrade\r\nAuthorization: Bearer not-a-real-token\r\n' +
+    `Sec-WebSocket-Key: ${randomBytes(16).toString('base64')}\r\nSec-WebSocket-Version: 13\r\n\r\n`,
+  );
+  const response = await new Promise((resolve) => socket.once('data', (d) => resolve(d.toString())));
+  assert.match(response, /401/);
+  socket.destroy();
+});
+
+test('a position written on one device reaches the other', async () => {
+  const meta = await ingest('One two three.\n\nFour five six.\n\nSeven eight nine.', 'Handoff');
+
+  const phone = await connect('?device=phone');
   await phone.next(); // hello
 
-  await fetch(`http://127.0.0.1:${port}/api/sync/state/${meta.id}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ position: { blockIndex: 2, tokenIndex: 1 }, rev: 0, deviceId: 'laptop' }),
-  });
+  await writeState(meta.id, { blockIndex: 2, tokenIndex: 1 }, 'laptop');
 
   const pushed = await phone.next();
   assert.equal(pushed.type, 'state');
@@ -208,72 +258,55 @@ test('a position written on one device reaches the other', async () => {
 });
 
 test('a device is not sent the echo of its own write', async () => {
-  const ingest = await fetch(`http://127.0.0.1:${port}/api/ingest/text`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text: 'Alpha beta.\n\nGamma delta.', title: 'Echo' }),
-  });
-  const { meta } = await ingest.json();
-
-  const laptop = await connect('?user=local&device=laptop');
+  const meta = await ingest('Alpha beta.\n\nGamma delta.', 'Echo');
+  const laptop = await connect('?device=laptop');
   await laptop.next();
 
-  await fetch(`http://127.0.0.1:${port}/api/sync/state/${meta.id}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ position: { blockIndex: 1, tokenIndex: 0 }, rev: 0, deviceId: 'laptop' }),
-  });
+  await writeState(meta.id, { blockIndex: 1, tokenIndex: 0 }, 'laptop');
 
   await assert.rejects(() => laptop.next(), /timed out/);
   laptop.close();
 });
 
-test('another user never sees this user traffic', async () => {
-  const ingest = await fetch(`http://127.0.0.1:${port}/api/ingest/text`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text: 'Private one.\n\nPrivate two.', title: 'Private' }),
-  });
-  const { meta } = await ingest.json();
+test('another account never sees this account traffic', async () => {
+  const meta = await ingest('Private one.\n\nPrivate two.', 'Private');
 
-  const stranger = await connect('?user=mallory&device=other');
+  // A real, separate account with its own live socket.
+  const stranger = await connect('?device=other', strangerToken);
   await stranger.next();
 
-  await fetch(`http://127.0.0.1:${port}/api/sync/state/${meta.id}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json', 'x-pagecast-user': 'alice' },
-    body: JSON.stringify({ position: { blockIndex: 1, tokenIndex: 0 }, rev: 0, deviceId: 'alice-phone' }),
-  });
+  await writeState(meta.id, { blockIndex: 1, tokenIndex: 0 }, 'my-phone');
 
   await assert.rejects(() => stranger.next(), /timed out/);
   stranger.close();
 });
 
-test('a subscribed client only hears about its own documents', async () => {
-  const mk = async (title) => {
-    const r = await fetch(`http://127.0.0.1:${port}/api/ingest/text`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: 'One two.\n\nThree four.', title }),
-    });
-    return (await r.json()).meta;
-  };
-  const watched = await mk('Watched');
-  const ignored = await mk('Ignored');
+test('subscribing to another account document pushes nothing', async () => {
+  const meta = await ingest('Not for you.\n\nStill not.', 'Sealed');
 
-  const client = await connect('?user=local&device=tablet');
+  const stranger = await connect('?device=snoop', strangerToken);
+  await stranger.next();
+  // The subscription is accepted -- the server does not confirm or deny that
+  // the id exists -- but no traffic for it is ever delivered.
+  stranger.send({ type: 'subscribe', documentIds: [meta.id] });
+  await stranger.next();
+
+  await writeState(meta.id, { blockIndex: 1, tokenIndex: 0 }, 'my-laptop');
+  await assert.rejects(() => stranger.next(), /timed out/);
+  stranger.close();
+});
+
+test('a subscribed client only hears about its own documents', async () => {
+  const watched = await ingest('One two.\n\nThree four.', 'Watched');
+  const ignored = await ingest('One two.\n\nThree four.', 'Ignored');
+
+  const client = await connect('?device=tablet');
   await client.next();
   client.send({ type: 'subscribe', documentIds: [watched.id] });
   await client.next();
 
-  const write = (id) => fetch(`http://127.0.0.1:${port}/api/sync/state/${id}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ position: { blockIndex: 1, tokenIndex: 0 }, rev: 0, deviceId: 'laptop' }),
-  });
-
-  await write(ignored.id);
-  await write(watched.id);
+  await writeState(ignored.id, { blockIndex: 1, tokenIndex: 0 }, 'laptop');
+  await writeState(watched.id, { blockIndex: 1, tokenIndex: 0 }, 'laptop');
 
   const message = await client.next();
   assert.equal(message.state.documentId, watched.id, 'the unsubscribed document must not be pushed');
@@ -293,7 +326,7 @@ test('an upgrade on the wrong path is refused', async () => {
 });
 
 test('malformed JSON over the socket gets an error, not a dropped connection', async () => {
-  const client = await connect('?user=local&device=laptop');
+  const client = await connect('?device=laptop');
   await client.next();
   client.sendRaw(clientFrame(0x1, Buffer.from('{ not json')));
   const err = await client.next();

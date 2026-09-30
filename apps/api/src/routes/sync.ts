@@ -20,6 +20,7 @@ export function registerSyncRoutes(router: Router): void {
 
   router.get('/api/sync/state/:documentId', async (ctx) => {
     const documentId = requireId(ctx.params['documentId']);
+    await store.getDocument(documentId, ctx.userId);
     const state = await store.getState(ctx.userId, documentId);
     if (!state) throw new HttpError(404, `no reading state for ${documentId}`);
     sendJson(ctx.res, 200, { state });
@@ -32,7 +33,7 @@ export function registerSyncRoutes(router: Router): void {
    */
   router.put('/api/sync/state/:documentId', async (ctx) => {
     const documentId = requireId(ctx.params['documentId']);
-    const doc = await store.getDocument(documentId);
+    const doc = await store.getDocument(documentId, ctx.userId);
     const body = await readJson<{
       position?: ReadingPosition;
       speed?: number;
@@ -67,7 +68,7 @@ export function registerSyncRoutes(router: Router): void {
 
   router.delete('/api/sync/state/:documentId', async (ctx) => {
     const documentId = requireId(ctx.params['documentId']);
-    const doc = await store.getDocument(documentId);
+    const doc = await store.getDocument(documentId, ctx.userId);
     const reset: ReadingState = {
       documentId,
       position: { blockIndex: 0, tokenIndex: 0 },

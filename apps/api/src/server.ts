@@ -1,7 +1,10 @@
 import http from 'node:http';
+import { sessionTokenFrom, toPublicUser } from './auth.js';
 import { config } from './config.js';
 import { applyCors, HttpError, Router, sendError, sendJson } from './http.js';
 import { registerAudioRoutes } from './routes/audio.js';
+import { registerAuthRoutes } from './routes/auth.js';
+import { registerFolderRoutes } from './routes/folders.js';
 import { registerDocumentRoutes } from './routes/documents.js';
 import { registerIngestRoutes } from './routes/ingest.js';
 import { registerSyncRoutes } from './routes/sync.js';
@@ -13,10 +16,21 @@ import { hub } from './ws.js';
 export function buildRouter(): Router {
   const router = new Router();
 
-  router.get('/api/health', (ctx) => {
+  // Resolve the session once per request; the router refuses anything that
+  // is not a registered public route without one.
+  router.setAuthenticator(async (req) => {
+    const token = sessionTokenFrom(req);
+    if (!token) return null;
+    const resolved = await store.resolveSession(token);
+    if (!resolved) return null;
+    return { user: toPublicUser(resolved.user), session: resolved.session };
+  });
+
+  // Public: a monitoring probe should not need credentials, and it reports
+  // nothing about anybody's library.
+  router.public_('GET', '/api/health', (ctx) => {
     sendJson(ctx.res, 200, {
       ok: true,
-      documents: store.listDocuments().length,
       voices: listVoices().length,
       ttsProvider: getProvider().id,
       connections: hub.connectionCount,
@@ -24,8 +38,10 @@ export function buildRouter(): Router {
     });
   });
 
+  registerAuthRoutes(router);
   registerIngestRoutes(router);
   registerDocumentRoutes(router);
+  registerFolderRoutes(router);
   registerAudioRoutes(router);
   registerSyncRoutes(router);
   return router;
@@ -67,7 +83,19 @@ export function createServer(): http.Server {
       socket.end('HTTP/1.1 404 Not Found\r\n\r\n');
       return;
     }
-    hub.handleUpgrade(req, socket, head);
+
+    // The socket carries another reader's positions, so it is authenticated
+    // from the session exactly like an HTTP route -- not from a user id in the
+    // query string, which anyone could type.
+    void (async () => {
+      const token = sessionTokenFrom(req);
+      const resolved = token ? await store.resolveSession(token) : null;
+      if (!resolved) {
+        socket.end('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        return;
+      }
+      hub.handleUpgrade(req, socket, head, resolved.user.id);
+    })();
   });
 
   return server;

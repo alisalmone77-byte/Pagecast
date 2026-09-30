@@ -67,6 +67,12 @@ export type SourceKind = 'pdf' | 'epub' | 'docx' | 'txt' | 'url' | 'scan' | 'pas
 
 export interface DocumentMeta {
   readonly id: string;
+  /**
+   * Account that owns this document. Optional only so that libraries created
+   * before accounts existed still parse; the server treats an unowned document
+   * as belonging to nobody and hides it until it is adopted.
+   */
+  readonly ownerId?: string;
   readonly title: string;
   readonly author?: string;
   readonly sourceKind: SourceKind;
@@ -154,6 +160,21 @@ export interface ReadingState {
   readonly updatedAt: string;
   /** Which device produced this revision, so a client can ignore its own echo. */
   readonly deviceId: string;
+}
+
+/** A user-created folder. Folders nest one level deep at most, on purpose:
+ *  a reading library is browsed, not filed, and deep trees turn finding a
+ *  document into navigation rather than recognition. */
+export interface Folder {
+  readonly id: string;
+  readonly ownerId: string;
+  readonly name: string;
+  /** Null for a top-level folder. */
+  readonly parentId: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  /** Position among its siblings, so ordering survives a rename. */
+  readonly sortOrder: number;
 }
 
 export interface Highlight {

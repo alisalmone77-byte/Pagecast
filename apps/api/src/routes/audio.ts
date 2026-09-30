@@ -17,7 +17,7 @@ export function registerAudioRoutes(router: Router): void {
    */
   router.post('/api/documents/:id/audio', async (ctx) => {
     const id = requireId(ctx.params['id']);
-    const doc = await store.getDocument(id);
+    const doc = await store.getDocument(id, ctx.userId);
     const body = await readJson<{ voiceId?: string; wait?: boolean }>(ctx.req).catch(() => ({} as { voiceId?: string; wait?: boolean }));
     const voice = findVoice(body.voiceId);
 
@@ -52,6 +52,7 @@ export function registerAudioRoutes(router: Router): void {
   /** Poll synthesis progress and fetch the timeline as it grows. */
   router.get('/api/documents/:id/timeline', async (ctx) => {
     const id = requireId(ctx.params['id']);
+    await store.getDocument(id, ctx.userId);
     const voice = findVoice(ctx.query.get('voiceId') ?? undefined);
     const timeline = await store.getTimeline(id, voice.id);
     const progress = getProgress(id, voice.id);
@@ -68,6 +69,7 @@ export function registerAudioRoutes(router: Router): void {
   /** Which voices already have a timeline, so the picker can show what is cached. */
   router.get('/api/documents/:id/voices', async (ctx) => {
     const id = requireId(ctx.params['id']);
+    await store.getDocument(id, ctx.userId);
     sendJson(ctx.res, 200, { synthesized: await store.listTimelineVoices(id) });
   });
 
@@ -79,7 +81,7 @@ export function registerAudioRoutes(router: Router): void {
     const timeline = await store.getTimeline(id, voice.id);
     if (!timeline) throw new HttpError(409, `document ${id} has no audio for voice ${voice.id} yet`);
 
-    const doc = await store.getDocument(id);
+    const doc = await store.getDocument(id, ctx.userId);
     sendJson(ctx.res, 200, {
       timeMs: timeAtPosition(timeline, body.position),
       progress: progressAt(doc.content, body.position),
@@ -97,6 +99,9 @@ export function registerAudioRoutes(router: Router): void {
     const id = requireId(ctx.params['id']);
     const voiceId = requireId(ctx.params['voiceId']);
     const file = requireId(ctx.params['file']);
+    // The synthesised audio is the document; serving it needs the same
+    // ownership check as reading the text.
+    await store.getDocument(id, ctx.userId);
 
     const parsed = /^(\d+)\.([a-z0-9]+)$/i.exec(file);
     if (!parsed) throw new HttpError(400, `malformed audio filename: ${file}`);

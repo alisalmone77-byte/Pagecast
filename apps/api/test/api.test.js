@@ -16,11 +16,30 @@ const { startServer } = await import('./helpers.js');
 
 let base;
 let stop;
+/** Session token for the default test account, sent as a bearer credential. */
+let token;
 
 before(async () => {
   await store.init();
   ({ base, stop } = await startServer(createServer));
+  token = await registerAccount('reader@example.com', 'correct horse battery');
 });
+
+function authHeader(which = token) {
+  return { authorization: `Bearer ${which}` };
+}
+
+/** Create an account and return its session token. */
+async function registerAccount(email, password) {
+  const res = await fetch(`${base}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const body = await res.json();
+  assert.equal(res.status, 201, JSON.stringify(body));
+  return body.token;
+}
 
 after(async () => {
   await stop?.();
@@ -36,7 +55,9 @@ const SAMPLE = [
 ].join('\n');
 
 async function api(method, route, body, headers = {}) {
-  const init = { method, headers: { 'x-pagecast-device': 'test-device', ...headers } };
+  const auth = headers.token === null ? {} : { authorization: `Bearer ${headers.token ?? token}` };
+  const { token: _ignored, ...rest } = headers;
+  const init = { method, headers: { 'x-pagecast-device': 'test-device', ...auth, ...rest } };
   if (body !== undefined) {
     if (Buffer.isBuffer(body)) init.body = body;
     else {
@@ -173,7 +194,7 @@ test('synthesis produces a playable timeline and serves the audio', async () => 
   const last = timeline.chunks[timeline.chunks.length - 1];
   assert.equal(timeline.durationMs, last.startMs + last.durationMs);
 
-  const audio = await fetch(`${base}${timeline.chunks[0].url}`);
+  const audio = await fetch(`${base}${timeline.chunks[0].url}`, { headers: authHeader() });
   assert.equal(audio.status, 200);
   assert.equal(audio.headers.get('content-type'), 'audio/wav');
   assert.ok(Number(audio.headers.get('content-length')) > 1000);
@@ -184,12 +205,12 @@ test('audio chunks honour range requests', async () => {
   const { json } = await api('POST', `/api/documents/${meta.id}/audio`, { wait: true });
   const url = `${base}${json.timeline.chunks[0].url}`;
 
-  const partial = await fetch(url, { headers: { range: 'bytes=0-99' } });
+  const partial = await fetch(url, { headers: { ...authHeader(), range: 'bytes=0-99' } });
   assert.equal(partial.status, 206);
   assert.equal(partial.headers.get('content-length'), '100');
   assert.match(partial.headers.get('content-range'), /^bytes 0-99\/\d+$/);
 
-  const bad = await fetch(url, { headers: { range: 'bytes=99999999-' } });
+  const bad = await fetch(url, { headers: { ...authHeader(), range: 'bytes=99999999-' } });
   assert.equal(bad.status, 416);
 });
 
@@ -337,16 +358,56 @@ test('a highlight outside the document is refused', async () => {
   assert.equal((await api('POST', `/api/documents/${meta.id}/highlights`, { blockIndex: 999 })).status, 400);
 });
 
-test('per-user state is isolated', async () => {
-  const meta = await ingestSample('Shared Doc');
-  await api('PUT', `/api/sync/state/${meta.id}`, { position: { blockIndex: 2, tokenIndex: 0 }, rev: 0 }, { 'x-pagecast-user': 'alice' });
-  const bob = await api('GET', `/api/sync/state/${meta.id}`, undefined, { 'x-pagecast-user': 'bob' });
-  assert.equal(bob.status, 404, "bob should not see alice's progress");
+test("one account cannot reach another's documents", async () => {
+  const mine = await ingestSample('Private Doc');
+  const stranger = await registerAccount('stranger@example.com', 'another good passphrase');
+
+  // Every route that touches a document must refuse, and must report 404
+  // rather than 403 so ids cannot be probed for existence.
+  for (const [method, route, body] of [
+    ['GET', `/api/documents/${mine.id}`, undefined],
+    ['PATCH', `/api/documents/${mine.id}`, { title: 'stolen' }],
+    ['DELETE', `/api/documents/${mine.id}`, undefined],
+    ['POST', `/api/documents/${mine.id}/resolve`, { position: { blockIndex: 0, tokenIndex: 0 } }],
+    ['POST', `/api/documents/${mine.id}/audio`, { wait: false }],
+    ['GET', `/api/documents/${mine.id}/timeline`, undefined],
+    ['GET', `/api/documents/${mine.id}/highlights`, undefined],
+    ['POST', `/api/documents/${mine.id}/highlights`, { blockIndex: 0, startToken: 0, endToken: 1 }],
+    ['PUT', `/api/sync/state/${mine.id}`, { position: { blockIndex: 0, tokenIndex: 0 }, rev: 0 }],
+    ['GET', `/api/sync/state/${mine.id}`, undefined],
+  ]) {
+    const res = await api(method, route, body, { token: stranger });
+    assert.equal(res.status, 404, `${method} ${route} leaked to another account`);
+  }
+
+  // And the library listing simply does not contain it.
+  const theirs = await api('GET', '/api/documents', undefined, { token: stranger });
+  assert.ok(!theirs.json.documents.some((d) => d.id === mine.id));
+});
+
+test('synthesised audio is not served to another account', async () => {
+  const mine = await ingestSample('Private Audio');
+  const { json } = await api('POST', `/api/documents/${mine.id}/audio`, { wait: true });
+  const stranger = await registerAccount('eavesdropper@example.com', 'yet another passphrase');
+
+  const res = await fetch(`${base}${json.timeline.chunks[0].url}`, {
+    headers: { authorization: `Bearer ${stranger}` },
+  });
+  assert.equal(res.status, 404, 'audio is the document; it must not leak');
+});
+
+test('reading state is per account', async () => {
+  const meta = await ingestSample('Shared Title');
+  await api('PUT', `/api/sync/state/${meta.id}`, { position: { blockIndex: 2, tokenIndex: 0 }, rev: 0 });
+  const mine = await api('GET', `/api/sync/state/${meta.id}`);
+  assert.equal(mine.json.state.position.blockIndex, 2);
 });
 
 test('malformed JSON is a 400, not a crash', async () => {
   const res = await fetch(`${base}/api/ingest/url`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: '{ not json',
+    method: 'POST',
+    headers: { ...authHeader(), 'content-type': 'application/json' },
+    body: '{ not json',
   });
   assert.equal(res.status, 400);
 });

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { FolderTree } from './components/FolderTree.js';
 import { IngestModal } from './components/IngestModal.js';
 import { Library, type LibraryFilter } from './screens/Library.js';
 import { Reader } from './screens/Reader.js';
+import { SignIn } from './screens/SignIn.js';
 import { useSettings } from './state/settings.js';
 import { syncChannel } from './api/sync.js';
+import { api, onSignedOut, type FolderWithCounts, type PublicUser } from './api/client.js';
 
 /**
  * Routing is a single path segment -- `/` for the library, `/d/<id>` for a
@@ -17,19 +20,67 @@ function documentIdFromPath(): string | null {
 
 export function App() {
   const { settings, update } = useSettings();
+  const [user, setUser] = useState<PublicUser | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [documentId, setDocumentId] = useState<string | null>(documentIdFromPath);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<LibraryFilter>('all');
+  const [folderId, setFolderId] = useState<string | null | undefined>(undefined);
+  const [folders, setFolders] = useState<FolderWithCounts[]>([]);
+  const [unfiled, setUnfiled] = useState(0);
   const [adding, setAdding] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [counts, setCounts] = useState<Record<LibraryFilter, number>>({
     all: 0, recent: 0, bookmarked: 0, inProgress: 0,
   });
 
+  /** Resume an existing session on load, if the cookie is still good. */
   useEffect(() => {
+    api.me()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setCheckingSession(false));
+  }, []);
+
+  /** A 401 from anywhere means the session ended; drop back to sign-in. */
+  useEffect(() => onSignedOut(() => setUser(null)), []);
+
+  useEffect(() => {
+    if (!user) return;
     syncChannel.connect();
     return () => syncChannel.close();
+  }, [user]);
+
+  const reloadFolders = useCallback(() => {
+    api.listFolders()
+      .then(({ folders: next, unfiled: count }) => { setFolders(next); setUnfiled(count); })
+      .catch(() => { /* the library still works without the folder list */ });
   }, []);
+
+  useEffect(() => {
+    if (user) reloadFolders();
+  }, [user, refreshKey, reloadFolders]);
+
+  const signOut = useCallback(async () => {
+    try {
+      await api.logout();
+    } finally {
+      setUser(null);
+      setDocumentId(null);
+      setFolders([]);
+      history.pushState(null, '', '/');
+    }
+  }, []);
+
+  const moveToFolder = useCallback(
+    async (docId: string, target: string | null) => {
+      try {
+        await api.moveToFolder([docId], target);
+        setRefreshKey((k) => k + 1);
+      } catch { /* the card stays where it was */ }
+    },
+    [],
+  );
 
   useEffect(() => {
     const onPop = () => setDocumentId(documentIdFromPath());
@@ -47,6 +98,13 @@ export function App() {
     setDocumentId(null);
     setRefreshKey((k) => k + 1);
   }, []);
+
+  if (checkingSession) {
+    return <div className="app app--loading"><p className="empty">Opening your library…</p></div>;
+  }
+  if (!user) {
+    return <SignIn onSignedIn={(next) => { setUser(next); setRefreshKey((k) => k + 1); }} />;
+  }
 
   return (
     <div className="app">
@@ -81,7 +139,18 @@ export function App() {
         <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}>
           + Add source
         </button>
-        <button type="button" className="navbar__avatar" aria-label="Account">P</button>
+        <details className="account">
+          <summary className="navbar__avatar" aria-label="Account" title={user.email}>
+            {(user.displayName || user.email).slice(0, 1).toUpperCase()}
+          </summary>
+          <div className="account__menu">
+            <p className="account__name">{user.displayName}</p>
+            <p className="account__email">{user.email}</p>
+            <button type="button" className="btn btn--ghost btn--block" onClick={() => void signOut()}>
+              Sign out
+            </button>
+          </div>
+        </details>
       </nav>
 
       {documentId === null ? (
@@ -98,14 +167,34 @@ export function App() {
                   key={id}
                   type="button"
                   className="sidebar__item"
-                  aria-current={filter === id}
-                  onClick={() => setFilter(id)}
+                  aria-current={folderId === undefined && filter === id}
+                  onClick={() => { setFilter(id); setFolderId(undefined); }}
                 >
                   {label}
                   <span className="sidebar__count">{counts[id]}</span>
                 </button>
               ))}
             </div>
+
+            <FolderTree
+              folders={folders}
+              unfiled={unfiled}
+              selected={folderId}
+              onSelect={(next) => setFolderId(next)}
+              onCreate={(name, parentId) => {
+                void api.createFolder(name, parentId).then(reloadFolders).catch(() => undefined);
+              }}
+              onRename={(id, name) => {
+                void api.renameFolder(id, name).then(reloadFolders).catch(() => undefined);
+              }}
+              onDelete={(id) => {
+                void api.deleteFolder(id).then(() => {
+                  if (folderId === id) setFolderId(undefined);
+                  setRefreshKey((k) => k + 1);
+                }).catch(() => undefined);
+              }}
+              onDropDocument={(docId, target) => void moveToFolder(docId, target)}
+            />
 
             <div className="sidebar__group">
               <p className="sidebar__label">Appearance</p>
@@ -128,9 +217,12 @@ export function App() {
             <Library
               search={search}
               filter={filter}
+              folderId={folderId}
+              folders={folders}
               refreshKey={refreshKey}
               onOpen={open}
               onCountsChange={setCounts}
+              onMoveToFolder={moveToFolder}
             />
           </main>
         </div>

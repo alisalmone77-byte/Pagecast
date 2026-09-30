@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { DocumentMeta } from '@pagecast/core';
-import { api, type LibraryEntry } from '../api/client.js';
+import { api, type FolderWithCounts, type LibraryEntry } from '../api/client.js';
 import { formatTime } from '../components/AudioDock.js';
 
 export type LibraryFilter = 'all' | 'recent' | 'bookmarked' | 'inProgress';
@@ -9,12 +9,18 @@ export type SortKey = 'recent' | 'progress' | 'title' | 'length';
 export interface LibraryProps {
   readonly search: string;
   readonly filter: LibraryFilter;
+  /** A folder id, `null` for Unfiled, or `undefined` for no folder filter. */
+  readonly folderId: string | null | undefined;
+  readonly folders: readonly FolderWithCounts[];
   readonly refreshKey: number;
   onOpen(id: string): void;
   onCountsChange(counts: Record<LibraryFilter, number>): void;
+  onMoveToFolder(documentId: string, folderId: string | null): void;
 }
 
-export function Library({ search, filter, refreshKey, onOpen, onCountsChange }: LibraryProps) {
+export function Library({
+  search, filter, folderId, folders, refreshKey, onOpen, onCountsChange, onMoveToFolder,
+}: LibraryProps) {
   const [documents, setDocuments] = useState<LibraryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +58,9 @@ export function Library({ search, filter, refreshKey, onOpen, onCountsChange }: 
     const needle = search.trim().toLowerCase();
     let list = documents.filter((doc) => {
       if (needle && !`${doc.title} ${doc.author ?? ''}`.toLowerCase().includes(needle)) return false;
+      // A selected folder wins over the filter chips: `null` means Unfiled,
+      // `undefined` means no folder filter at all.
+      if (folderId !== undefined && (doc.folderId ?? null) !== folderId) return false;
       const progress = doc.state?.progress ?? 0;
       if (filter === 'bookmarked') return doc.bookmarked === true;
       if (filter === 'inProgress') return progress > 0.005 && progress < 0.995;
@@ -67,7 +76,7 @@ export function Library({ search, filter, refreshKey, onOpen, onCountsChange }: 
       }
     });
     return list;
-  }, [documents, search, filter, sort]);
+  }, [documents, search, filter, folderId, sort]);
 
   const remove = async (id: string) => {
     const previous = documents;
@@ -94,7 +103,7 @@ export function Library({ search, filter, refreshKey, onOpen, onCountsChange }: 
 
   return (
     <div className="library">
-      {continueItem && filter !== 'bookmarked' && !search && (
+      {continueItem && filter !== 'bookmarked' && folderId === undefined && !search && (
         <section className="hero">
           <p className="hero__eyebrow">Continue listening</p>
           <h2 className="hero__title">{continueItem.title}</h2>
@@ -110,7 +119,11 @@ export function Library({ search, filter, refreshKey, onOpen, onCountsChange }: 
 
       <div className="library__toolbar">
         <h2 className="library__heading">
-          {filter === 'bookmarked' ? 'Bookmarked' : filter === 'inProgress' ? 'In progress' : 'All documents'}
+          {folderId === undefined
+            ? (filter === 'bookmarked' ? 'Bookmarked' : filter === 'inProgress' ? 'In progress' : 'All documents')
+            : folderId === null
+              ? 'Unfiled'
+              : folders.find((f) => f.id === folderId)?.name ?? 'Folder'}
           <span className="library__count">{visible.length}</span>
         </h2>
         <div className="library__controls">
@@ -132,7 +145,11 @@ export function Library({ search, filter, refreshKey, onOpen, onCountsChange }: 
 
       {visible.length === 0 ? (
         <p className="empty">
-          {search ? `Nothing matches “${search}”.` : 'Nothing here yet — add a PDF, an article link or some text to get started.'}
+          {search
+            ? `Nothing matches “${search}”.`
+            : folderId !== undefined
+              ? 'This folder is empty. Drag a document onto it in the sidebar, or use the folder button on a card.'
+              : 'Nothing here yet — add a PDF, an article link or some text to get started.'}
         </p>
       ) : (
         <div className={view === 'grid' ? 'grid' : 'list'}>
@@ -141,9 +158,11 @@ export function Library({ search, filter, refreshKey, onOpen, onCountsChange }: 
               key={doc.id}
               doc={doc}
               view={view}
+              folders={folders}
               onOpen={() => onOpen(doc.id)}
               onDelete={() => void remove(doc.id)}
               onBookmark={() => void toggleBookmark(doc)}
+              onMoveToFolder={(target) => onMoveToFolder(doc.id, target)}
             />
           ))}
         </div>
@@ -153,17 +172,28 @@ export function Library({ search, filter, refreshKey, onOpen, onCountsChange }: 
 }
 
 function DocumentCard({
-  doc, view, onOpen, onDelete, onBookmark,
+  doc, view, folders, onOpen, onDelete, onBookmark, onMoveToFolder,
 }: {
   doc: LibraryEntry;
   view: 'grid' | 'list';
+  folders: readonly FolderWithCounts[];
   onOpen: () => void;
   onDelete: () => void;
   onBookmark: () => void;
+  onMoveToFolder: (folderId: string | null) => void;
 }) {
   const progress = doc.state?.progress ?? 0;
   return (
-    <article className={view === 'grid' ? 'card' : 'row'}>
+    <article
+      className={view === 'grid' ? 'card' : 'row'}
+      draggable
+      // Dragging a card onto a folder is the gesture people already expect,
+      // and it avoids a modal for what should be one motion.
+      onDragStart={(e) => {
+        e.dataTransfer.setData('application/x-pagecast-document', doc.id);
+        e.dataTransfer.effectAllowed = 'move';
+      }}
+    >
       <button type="button" className="card__main" onClick={onOpen}>
         <span className={`badge badge--${doc.sourceKind}`}>{labelFor(doc)}</span>
         <h3 className="card__title">{doc.title}</h3>
@@ -177,6 +207,22 @@ function DocumentCard({
         )}
       </button>
       <div className="card__actions">
+        {folders.length > 0 && (
+          <label className="card__folder">
+            <span className="visually-hidden">Move {doc.title} to a folder</span>
+            <select
+              value={doc.folderId ?? ''}
+              onChange={(e) => onMoveToFolder(e.target.value === '' ? null : e.target.value)}
+            >
+              <option value="">Unfiled</option>
+              {orderedForPicker(folders).map(({ folder, depth }) => (
+                <option key={folder.id} value={folder.id}>
+                  {depth > 0 ? `— ${folder.name}` : folder.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button
           type="button"
           className="btn btn--icon btn--ghost"
@@ -219,4 +265,27 @@ function SkeletonGrid() {
       {Array.from({ length: 6 }, (_, i) => <div key={i} className="card card--skeleton" />)}
     </div>
   );
+}
+
+/**
+ * Flatten folders for a `<select>`, each parent immediately followed by its own
+ * children. The server returns one sorted list, so a child can sort ahead of
+ * its parent -- which leaves the indent pointing at nothing and reads as though
+ * the nesting is wrong.
+ */
+function orderedForPicker(
+  folders: readonly FolderWithCounts[],
+): Array<{ folder: FolderWithCounts; depth: number }> {
+  const out: Array<{ folder: FolderWithCounts; depth: number }> = [];
+  const childrenOf = (parentId: string | null) => folders.filter((f) => f.parentId === parentId);
+
+  const walk = (parentId: string | null, depth: number) => {
+    for (const folder of childrenOf(parentId)) {
+      out.push({ folder, depth });
+      // One level of nesting is all the server allows, so this cannot run away.
+      if (depth === 0) walk(folder.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
 }

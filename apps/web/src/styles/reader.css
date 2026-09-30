@@ -393,3 +393,128 @@
   .navbar { gap: var(--space-2); }
   .hero__title { font-size: 21px; }
 }
+
+/* ------------------------------------------------------------- sign in */
+
+.app--loading { display: grid; place-items: center; }
+
+.signin {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  background:
+    radial-gradient(1100px 520px at 50% -10%, var(--accent-soft), transparent 70%),
+    var(--bg);
+}
+
+.signin__card {
+  width: min(400px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-6) var(--space-5);
+}
+
+.signin__brand {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-weight: 700; font-size: 16px; letter-spacing: -0.02em;
+  color: var(--accent);
+}
+.signin__brand span { color: var(--text); }
+
+.signin__title { font-size: 21px; font-weight: 700; letter-spacing: -0.02em; }
+.signin__subtitle { font-size: 13.5px; color: var(--text-muted); margin-top: calc(var(--space-2) * -1); line-height: 1.5; }
+.signin__error {
+  font-size: 13px; color: #b91c1c;
+  background: rgba(185, 28, 28, 0.09);
+  border-radius: var(--radius-md); padding: var(--space-2) var(--space-3);
+}
+[data-theme='dark'] .signin__error { color: #fca5a5; background: rgba(248, 113, 113, 0.12); }
+.signin__note { font-size: 12.5px; color: var(--text-faint); text-align: center; }
+
+.field__hint { font-size: 12px; color: var(--text-faint); line-height: 1.45; }
+.btn--block { width: 100%; }
+
+/* ------------------------------------------------------- account menu */
+
+.account { position: relative; }
+.account > summary { list-style: none; cursor: pointer; }
+.account > summary::-webkit-details-marker { display: none; }
+.account__menu {
+  position: absolute; right: 0; top: calc(100% + var(--space-2));
+  min-width: 220px; z-index: 60;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-3);
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.account__name { font-size: 14px; font-weight: 600; }
+.account__email { font-size: 12px; color: var(--text-faint); word-break: break-all; }
+
+/* -------------------------------------------------------- folder tree */
+
+.sidebar__label { display: flex; align-items: center; justify-content: space-between; }
+.sidebar__add {
+  border: 0; background: none; cursor: pointer;
+  color: var(--text-faint); font-size: 15px; line-height: 1;
+  padding: 0 var(--space-1); border-radius: var(--radius-sm);
+}
+.sidebar__add:hover { background: var(--bg-hover); color: var(--accent); }
+
+.sidebar__item--folder { padding-right: var(--space-2); }
+.sidebar__folder-name {
+  display: flex; align-items: center; gap: var(--space-2);
+  flex: 1; min-width: 0;
+  border: 0; background: none; cursor: pointer;
+  color: inherit; font: inherit; text-align: left; padding: 0;
+}
+.sidebar__folder-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.sidebar__folder-actions { display: none; gap: 1px; margin-left: var(--space-1); }
+.sidebar__item--folder:hover .sidebar__folder-actions,
+.sidebar__item--folder:focus-within .sidebar__folder-actions { display: flex; }
+.sidebar__folder-actions button {
+  border: 0; background: none; cursor: pointer; color: var(--text-faint);
+  padding: 0 3px; border-radius: var(--radius-sm); font-size: 13px; line-height: 1.4;
+}
+.sidebar__folder-actions button:hover { background: var(--bg-hover); color: var(--text); }
+
+/* The drop target has to be unmistakable mid-drag, when the cursor is
+   nowhere near the sidebar and the card is under the pointer. */
+.sidebar__item--drop {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  color: var(--accent);
+}
+
+.sidebar__rename {
+  width: calc(100% - var(--space-3));
+  padding: var(--space-1) var(--space-2);
+  margin: 2px var(--space-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  font-size: 14px;
+}
+.sidebar__empty { font-size: 12.5px; color: var(--text-faint); padding: var(--space-1) var(--space-3); }
+
+.card__folder select {
+  appearance: none;
+  max-width: 108px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  padding: 2px var(--space-2);
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.card[draggable='true'], .row[draggable='true'] { cursor: grab; }
+.card[draggable='true']:active, .row[draggable='true']:active { cursor: grabbing; }

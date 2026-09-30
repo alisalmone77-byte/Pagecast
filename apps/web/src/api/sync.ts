@@ -1,5 +1,5 @@
 import type { ReadingState } from '@pagecast/core';
-import { deviceId, userId } from './client.js';
+import { deviceId } from './client.js';
 
 /**
  * Live sync channel.
@@ -28,7 +28,9 @@ export class SyncChannel {
     if (this.socket || this.closed) return;
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${location.host}/api/sync/ws?user=${encodeURIComponent(userId)}&device=${encodeURIComponent(deviceId)}`;
+    // No user id in the query: the server authenticates the upgrade from the
+    // session cookie, which the browser attaches to the handshake for us.
+    const url = `${protocol}//${location.host}/api/sync/ws?device=${encodeURIComponent(deviceId)}`;
 
     let socket: WebSocket;
     try {

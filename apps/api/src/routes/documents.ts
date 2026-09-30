@@ -12,7 +12,7 @@ export function registerDocumentRoutes(router: Router): void {
   /** The library view: metadata plus each document's reading state. */
   router.get('/api/documents', async (ctx) => {
     const states = new Map((await store.listStates(ctx.userId)).map((s) => [s.documentId, s]));
-    const documents = store.listDocuments().map((meta) => ({
+    const documents = store.listDocuments(ctx.userId).map((meta) => ({
       ...meta,
       state: states.get(meta.id) ?? null,
     }));
@@ -33,7 +33,9 @@ export function registerDocumentRoutes(router: Router): void {
     const documents = states
       .map((state) => {
         const meta = store.getMeta(state.documentId);
-        return meta ? { ...meta, state } : null;
+        // Reading state is already per-user, but check ownership anyway so a
+        // document deleted and its id reused can never leak across accounts.
+        return meta && meta.ownerId === ctx.userId ? { ...meta, state } : null;
       })
       .filter((d): d is DocumentMeta & { state: typeof states[number] } => d !== null);
 
@@ -42,7 +44,7 @@ export function registerDocumentRoutes(router: Router): void {
 
   /** Full document: metadata, blocks, sentences and the reader's state. */
   router.get('/api/documents/:id', async (ctx) => {
-    const doc = await store.getDocument(requireId(ctx.params['id']));
+    const doc = await store.getDocument(requireId(ctx.params['id']), ctx.userId);
     const state = await store.ensureState(ctx.userId, doc.meta.id, defaultVoice().id);
     sendJson(ctx.res, 200, {
       meta: doc.meta,
@@ -67,13 +69,12 @@ export function registerDocumentRoutes(router: Router): void {
     if (body.folderId === null || typeof body.folderId === 'string') patch.folderId = body.folderId;
     if (typeof body.bookmarked === 'boolean') patch.bookmarked = body.bookmarked;
 
-    sendJson(ctx.res, 200, { meta: await store.updateMeta(id, patch) });
+    sendJson(ctx.res, 200, { meta: await store.updateMeta(id, patch, ctx.userId) });
   });
 
   router.delete('/api/documents/:id', async (ctx) => {
     const id = requireId(ctx.params['id']);
-    if (!store.getMeta(id)) throw new HttpError(404, `no document ${id}`);
-    await store.deleteDocument(id);
+    await store.deleteDocument(id, ctx.userId);
     sendJson(ctx.res, 200, { deleted: id });
   });
 
@@ -82,7 +83,7 @@ export function registerDocumentRoutes(router: Router): void {
    * sentence it belongs to, the sentence-aligned resume point, and progress.
    */
   router.post('/api/documents/:id/resolve', async (ctx) => {
-    const doc = await store.getDocument(requireId(ctx.params['id']));
+    const doc = await store.getDocument(requireId(ctx.params['id']), ctx.userId);
     const body = await readJson<{ position: ReadingPosition }>(ctx.req);
     const position = clampPosition(doc.content, body.position ?? { blockIndex: 0, tokenIndex: 0 });
 
@@ -99,12 +100,13 @@ export function registerDocumentRoutes(router: Router): void {
 
   router.get('/api/documents/:id/highlights', async (ctx) => {
     const id = requireId(ctx.params['id']);
+    await store.getDocument(id, ctx.userId);
     sendJson(ctx.res, 200, { highlights: await store.listHighlights(ctx.userId, id) });
   });
 
   router.post('/api/documents/:id/highlights', async (ctx) => {
     const id = requireId(ctx.params['id']);
-    const doc = await store.getDocument(id);
+    const doc = await store.getDocument(id, ctx.userId);
     const body = await readJson<Omit<Highlight, 'id' | 'documentId' | 'createdAt'>>(ctx.req);
 
     const block = doc.content.blocks[body.blockIndex];
@@ -132,6 +134,7 @@ export function registerDocumentRoutes(router: Router): void {
   router.delete('/api/documents/:id/highlights/:highlightId', async (ctx) => {
     const id = requireId(ctx.params['id']);
     const highlightId = requireId(ctx.params['highlightId']);
+    await store.getDocument(id, ctx.userId);
     const all = await store.listHighlights(ctx.userId, id);
     const remaining = all.filter((h) => h.id !== highlightId);
     if (remaining.length === all.length) throw new HttpError(404, `no highlight ${highlightId}`);

@@ -23,7 +23,7 @@ export function registerIngestRoutes(router: Router): void {
     const title = header(ctx.req.headers['x-pagecast-title']);
     const kind = detectKind(bytes, filename);
 
-    const doc = await ingest({ kind, bytes, filename, title });
+    const doc = await ingest({ kind, bytes, filename, title, ownerId: ctx.userId });
     sendJson(ctx.res, 201, { meta: doc.meta });
   });
 
@@ -31,7 +31,7 @@ export function registerIngestRoutes(router: Router): void {
   router.post('/api/ingest/url', async (ctx) => {
     const body = await readJson<{ url?: string; title?: string }>(ctx.req);
     if (!body.url || body.url.trim().length === 0) throw new HttpError(400, 'a url is required');
-    const doc = await ingest({ kind: 'url', url: body.url.trim(), title: body.title });
+    const doc = await ingest({ kind: 'url', url: body.url.trim(), title: body.title, ownerId: ctx.userId });
     sendJson(ctx.res, 201, { meta: doc.meta });
   });
 
@@ -46,7 +46,7 @@ export function registerIngestRoutes(router: Router): void {
     if (!text || text.trim().length === 0) throw new HttpError(400, 'text or pages is required');
 
     const kind: SourceKind = body.kind === 'scan' ? 'scan' : 'paste';
-    const doc = await ingest({ kind, text, title: body.title });
+    const doc = await ingest({ kind, text, title: body.title, ownerId: ctx.userId });
     sendJson(ctx.res, 201, { meta: doc.meta });
   });
 }

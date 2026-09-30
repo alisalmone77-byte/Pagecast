@@ -1,5 +1,5 @@
 import type {
-  DocumentContent, DocumentMeta, Highlight, ReadingPosition, ReadingState, Timeline, Voice,
+  DocumentContent, DocumentMeta, Folder, Highlight, ReadingPosition, ReadingState, Timeline, Voice,
 } from '@pagecast/core';
 
 /**
@@ -32,17 +32,29 @@ export const deviceId: string = (() => {
   }
 })();
 
-export const userId = 'local';
+export interface PublicUser {
+  readonly id: string;
+  readonly email: string;
+  readonly displayName: string;
+  readonly createdAt: string;
+}
+
+export interface AuthConfig {
+  readonly allowRegistration: boolean;
+  readonly requiresInvite: boolean;
+  readonly hasAccounts: boolean;
+}
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('x-pagecast-device', deviceId);
-  headers.set('x-pagecast-user', userId);
   if (init.body !== undefined && !(init.body instanceof ArrayBuffer) && !ArrayBuffer.isView(init.body)) {
     headers.set('content-type', 'application/json');
   }
 
-  const response = await fetch(path, { ...init, headers });
+  // The session rides in an HttpOnly cookie, which the dev server proxies from
+  // a different origin, so credentials have to be sent explicitly.
+  const response = await fetch(path, { ...init, headers, credentials: 'include' });
   const text = await response.text();
   let body: unknown = null;
   try {
@@ -56,9 +68,27 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       body && typeof body === 'object' && 'error' in body
         ? String((body as { error: unknown }).error)
         : `request failed with ${response.status}`;
+    // A 401 anywhere means the session ended -- expired, or signed out from
+    // another device. Tell the app once rather than letting every in-flight
+    // request surface its own error.
+    if (response.status === 401) notifySignedOut();
     throw new ApiError(response.status, message);
   }
   return body as T;
+}
+
+/* --------------------------------------------------------- session events */
+
+type SignedOutListener = () => void;
+const signedOutListeners = new Set<SignedOutListener>();
+
+export function onSignedOut(listener: SignedOutListener): () => void {
+  signedOutListeners.add(listener);
+  return () => signedOutListeners.delete(listener);
+}
+
+function notifySignedOut(): void {
+  for (const listener of signedOutListeners) listener();
 }
 
 /* ------------------------------------------------------------- documents */
@@ -74,7 +104,60 @@ export interface FullDocument {
   readonly highlights: Highlight[];
 }
 
+export interface FolderWithCounts extends Folder {
+  readonly documentCount: number;
+  readonly totalCount: number;
+}
+
 export const api = {
+  /* ----------------------------------------------------------------- auth */
+
+  authConfig: () => request<AuthConfig>('/api/auth/config'),
+
+  me: () => request<{ user: PublicUser }>('/api/auth/me').then((r) => r.user),
+
+  register: (body: { email: string; password: string; displayName?: string; inviteCode?: string }) =>
+    request<{ user: PublicUser }>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }).then((r) => r.user),
+
+  login: (body: { email: string; password: string }) =>
+    request<{ user: PublicUser }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }).then((r) => r.user),
+
+  logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+
+  /* -------------------------------------------------------------- folders */
+
+  listFolders: () =>
+    request<{ folders: FolderWithCounts[]; unfiled: number }>('/api/folders'),
+
+  createFolder: (name: string, parentId: string | null = null) =>
+    request<{ folder: Folder }>('/api/folders', {
+      method: 'POST',
+      body: JSON.stringify({ name, parentId }),
+    }).then((r) => r.folder),
+
+  renameFolder: (id: string, name: string) =>
+    request<{ folder: Folder }>(`/api/folders/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    }).then((r) => r.folder),
+
+  deleteFolder: (id: string) =>
+    request<{ deleted: string; documentsMoved: number }>(`/api/folders/${id}`, { method: 'DELETE' }),
+
+  moveToFolder: (documentIds: string[], folderId: string | null) =>
+    request<{ moved: string[] }>('/api/folders/move', {
+      method: 'POST',
+      body: JSON.stringify({ documentIds, folderId }),
+    }),
+
+  /* ------------------------------------------------------------ documents */
+
   listDocuments: () => request<{ documents: LibraryEntry[] }>('/api/documents').then((r) => r.documents),
 
   continueListening: (limit = 5) =>

@@ -171,6 +171,7 @@ export async function ingest(request: IngestRequest): Promise<StoredDocument> {
   const now = new Date().toISOString();
   const meta: DocumentMeta = {
     id: store.newDocumentId(),
+    ownerId: request.ownerId,
     title: deriveTitle(extracted, request),
     author: extracted.author,
     sourceKind: request.kind,

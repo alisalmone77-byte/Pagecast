@@ -11,6 +11,8 @@ export interface Extracted {
 
 export interface IngestRequest {
   readonly kind: SourceKind;
+  /** Account the new document belongs to. */
+  readonly ownerId: string;
   readonly bytes?: Buffer;
   readonly url?: string;
   readonly text?: string;
