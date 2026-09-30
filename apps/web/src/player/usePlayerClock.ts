@@ -18,9 +18,15 @@ export function usePlayerClock(engine: AudioEngine, playing: boolean): number {
 
   useEffect(() => {
     if (!playing) {
-      // Settle on the exact paused position rather than the last tick.
+      // Settle on the exact paused position rather than the last tick...
       setMs(engine.currentMs());
-      return;
+      // ...and keep following it. Nothing ticks while paused, but the playhead
+      // still moves: a skip button, the scrubber, a keyboard shortcut, a
+      // hand-off from another device. The engine emits on each of those, and
+      // without this the clock and scrubber sit at the old position while the
+      // engine is somewhere else entirely -- pressing skip three times looked
+      // like the button was dead.
+      return engine.subscribe((snapshot) => setMs(snapshot.mediaMs));
     }
 
     let frame = 0;
