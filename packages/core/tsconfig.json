@@ -1,5 +1,14 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "outDir": "./dist", "rootDir": "./src", "composite": true },
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "composite": true,
+    // Keep the incremental build state inside outDir. By default a composite
+    // project writes tsconfig.tsbuildinfo next to the tsconfig, so `rm -rf dist`
+    // leaves it behind and the next `tsc` decides everything is up to date and
+    // emits nothing -- exiting 0 while producing no output.
+    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+  },
   "include": ["src/**/*.ts"]
 }
