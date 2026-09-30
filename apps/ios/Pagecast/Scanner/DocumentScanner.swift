@@ -10,6 +10,18 @@ import Vision
 //  corrected page rather than the raw frame is what makes the accuracy usable
 //  on a curved paperback held at an angle.
 
+/// Carries values across the hop to the OCR task.
+///
+/// `UIImage` and SwiftUI's callbacks are not marked `Sendable`, but this is
+/// safe by construction: the images are created here and never mutated, the
+/// closures are only ever invoked back on the main actor, and nothing on this
+/// side touches either again after the hop.
+private struct ScanHandoff: @unchecked Sendable {
+    let images: [UIImage]
+    let onFinish: ([String]) -> Void
+    let onError: (Error) -> Void
+}
+
 struct DocumentScanner: UIViewControllerRepresentable {
     /// One recognised string per captured page.
     let onFinish: ([String]) -> Void
@@ -37,18 +49,24 @@ struct DocumentScanner: UIViewControllerRepresentable {
         ) {
             // Snapshot the images before dismissing: the scan object does not
             // outlive its controller.
-            let images = (0..<scan.pageCount).map { scan.imageOfPage(at: $0) }
+            let handoff = ScanHandoff(
+                images: (0..<scan.pageCount).map { scan.imageOfPage(at: $0) },
+                onFinish: parent.onFinish,
+                onError: parent.onError
+            )
             controller.dismiss(animated: true)
 
-            Task.detached(priority: .userInitiated) { [parent] in
+            // Recognition is seconds of work per page; running it on the main
+            // thread would freeze the dismissal animation and the spinner.
+            Task.detached(priority: .userInitiated) {
                 do {
                     var pages: [String] = []
-                    for image in images {
+                    for image in handoff.images {
                         pages.append(try Self.recogniseText(in: image))
                     }
-                    await MainActor.run { parent.onFinish(pages) }
+                    await MainActor.run { handoff.onFinish(pages) }
                 } catch {
-                    await MainActor.run { parent.onError(error) }
+                    await MainActor.run { handoff.onError(error) }
                 }
             }
         }

@@ -39,6 +39,8 @@ final class PlaybackEngine: NSObject, ObservableObject {
     private var queuedChunks: [ObjectIdentifier: AudioChunk] = [:]
     private var displayLink: CADisplayLink?
     private var lastWordIndex = -1
+    /// The exact playhead at the last tick, before quantising for publication.
+    private var lastTickMs = 0
 
     var isPlaying: Bool { status == .playing }
 
@@ -273,12 +275,20 @@ final class PlaybackEngine: NSObject, ObservableObject {
               let chunk = queuedChunks[ObjectIdentifier(current)] else { return }
         let within = CMTimeGetSeconds(current.currentTime())
         guard within.isFinite else { return }
-        mediaMs = chunk.startMs + Int(within * 1000)
-        emitSpan()
+
+        let position = chunk.startMs + Int(within * 1000)
+
+        // The highlight needs every tick, so it is driven from the subject
+        // rather than from `mediaMs`. The published position only needs to be
+        // fine enough for a clock and a scrubber, and publishing it 30 times a
+        // second would re-render the dock on every frame for no visible gain.
+        if position / 100 != mediaMs / 100 { mediaMs = position }
+        lastTickMs = position
+        emitSpan(atMs: position)
     }
 
-    private func emitSpan() {
-        guard let index, let span = index.activeSpan(atMs: mediaMs) else { return }
+    private func emitSpan(atMs ms: Int? = nil) {
+        guard let index, let span = index.activeSpan(atMs: ms ?? mediaMs) else { return }
         guard span.wordIndex != lastWordIndex else { return }
         lastWordIndex = span.wordIndex
         activeSpan.send(span)

@@ -6,9 +6,18 @@ import UIKit
 //  Highlighting mutates attributes on the existing text storage rather than
 //  rebuilding the string. Only the two ranges that changed are touched, so a
 //  word change repaints a line fragment instead of re-laying out the document.
+//
+//  The view opts into TextKit 1 explicitly. On iOS 16+ a UITextView is backed
+//  by TextKit 2 by default, but touching `layoutManager` -- which both the tap
+//  handler and the auto-scroll need -- silently falls the view back to TextKit
+//  1 anyway. Asking for it up front means the behaviour is chosen rather than
+//  stumbled into, and the layout is not built twice on open.
 
 struct TrackingTextView: UIViewRepresentable {
     let attributed: NSAttributedString
+    /// Changes only when `attributed` was rebuilt. Compared instead of hashing
+    /// the string, which is O(n) over the whole document on every update.
+    let revision: Int
     let layout: TextLayoutIndex
     let theme: ReadingTheme
     /// The word currently being spoken, if any.
@@ -20,7 +29,7 @@ struct TrackingTextView: UIViewRepresentable {
     let onSelect: (ReadingPosition, ReadingPosition) -> Void
 
     func makeUIView(context: Context) -> UITextView {
-        let view = UITextView()
+        let view = UITextView(usingTextLayoutManager: false)
         view.isEditable = false
         view.isSelectable = true
         view.backgroundColor = .clear
@@ -50,8 +59,8 @@ struct TrackingTextView: UIViewRepresentable {
 
         // Only replace the whole string when the content or styling changed;
         // a word change must never take this path.
-        if coordinator.renderedRevision != attributed.hashValue {
-            coordinator.renderedRevision = attributed.hashValue
+        if coordinator.renderedRevision != revision {
+            coordinator.renderedRevision = revision
             let offset = view.contentOffset
             view.attributedText = attributed
             view.contentOffset = offset
@@ -81,7 +90,7 @@ struct TrackingTextView: UIViewRepresentable {
 
         init(parent: TrackingTextView) {
             self.parent = parent
-            self.renderedRevision = parent.attributed.hashValue
+            self.renderedRevision = parent.revision
         }
 
         /// Move the highlight, touching only what changed.

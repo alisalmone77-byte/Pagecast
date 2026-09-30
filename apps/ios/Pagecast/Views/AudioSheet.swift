@@ -4,6 +4,9 @@ import SwiftUI
 
 struct AudioSheet: View {
     @ObservedObject var model: ReaderModel
+    /// Observed directly: a view watching only `model` never hears the
+    /// playhead move, so the scrubber and clock would sit still.
+    @ObservedObject var engine: PlaybackEngine
     @EnvironmentObject private var settings: ReaderSettings
     @Environment(\.dismiss) private var dismiss
     @State private var scrubbing: Double?
@@ -22,10 +25,10 @@ struct AudioSheet: View {
                 // A large target: this gets used one-handed, walking.
                 Slider(
                     value: Binding(
-                        get: { scrubbing ?? Double(model.engine.mediaMs) },
+                        get: { scrubbing ?? Double(engine.mediaMs) },
                         set: { scrubbing = $0 }
                     ),
-                    in: 0...Double(max(1, model.engine.durationMs)),
+                    in: 0...Double(max(1, engine.durationMs)),
                     onEditingChanged: { editing in
                         guard !editing, let target = scrubbing else { return }
                         Task { await model.seek(toMs: Int(target)) }
@@ -35,9 +38,9 @@ struct AudioSheet: View {
                 .tint(theme.accent)
 
                 HStack {
-                    Text(Int(scrubbing ?? Double(model.engine.mediaMs)).asPlaybackTime)
+                    Text(Int(scrubbing ?? Double(engine.mediaMs)).asPlaybackTime)
                     Spacer()
-                    Text("−" + (model.engine.durationMs - Int(scrubbing ?? Double(model.engine.mediaMs))).asPlaybackTime)
+                    Text("−" + (engine.durationMs - Int(scrubbing ?? Double(engine.mediaMs))).asPlaybackTime)
                 }
                 .font(.caption)
                 .monospacedDigit()
@@ -51,13 +54,13 @@ struct AudioSheet: View {
                 .accessibilityLabel("Back 15 seconds")
 
                 Button { Task { await model.toggle() } } label: {
-                    Image(systemName: model.engine.isPlaying ? "pause.fill" : "play.fill")
+                    Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 32))
                         .frame(width: 76, height: 76)
                         .background(theme.accent, in: Circle())
                         .foregroundStyle(theme.wordForeground)
                 }
-                .accessibilityLabel(model.engine.isPlaying ? "Pause" : "Play")
+                .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
 
                 Button { Task { await model.skip(seconds: 15) } } label: {
                     Image(systemName: "goforward.15").font(.system(size: 30))
@@ -70,14 +73,14 @@ struct AudioSheet: View {
                 HStack {
                     Text("Speed").font(.subheadline).foregroundStyle(theme.secondaryText)
                     Spacer()
-                    Text(String(format: "%.1f×", model.engine.speed))
+                    Text(String(format: "%.1f×", engine.speed))
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
                 }
                 // 0.5 to 4.5 in 0.1 steps, as specified.
                 Slider(
                     value: Binding(
-                        get: { model.engine.speed },
+                        get: { engine.speed },
                         set: { model.setSpeed($0, settings: settings) }
                     ),
                     in: 0.5...4.5,
@@ -95,12 +98,12 @@ struct AudioSheet: View {
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
                                 .background(
-                                    abs(model.engine.speed - preset) < 0.05
+                                    abs(engine.speed - preset) < 0.05
                                         ? theme.accent : theme.accent.opacity(0.12),
                                     in: Capsule()
                                 )
                                 .foregroundStyle(
-                                    abs(model.engine.speed - preset) < 0.05
+                                    abs(engine.speed - preset) < 0.05
                                         ? theme.wordForeground : theme.accent
                                 )
                         }
@@ -184,10 +187,7 @@ struct ReadingSettingsSheet: View {
         NavigationStack {
             Form {
                 Section("Typeface") {
-                    Picker("Typeface", selection: Binding(
-                        get: { settings.typeface },
-                        set: { settings.typeface = $0 }
-                    )) {
+                    Picker("Typeface", selection: $settings.typeface) {
                         ForEach(ReadingTypeface.allCases) { Text($0.label).tag($0) }
                     }
                     .pickerStyle(.segmented)
@@ -200,10 +200,7 @@ struct ReadingSettingsSheet: View {
                 }
 
                 Section("Theme") {
-                    Picker("Theme", selection: Binding(
-                        get: { settings.theme },
-                        set: { settings.theme = $0 }
-                    )) {
+                    Picker("Theme", selection: $settings.theme) {
                         ForEach(ReadingTheme.allCases) { Text($0.label).tag($0) }
                     }
                     .pickerStyle(.segmented)

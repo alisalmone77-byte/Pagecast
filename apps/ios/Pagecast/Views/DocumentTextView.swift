@@ -59,6 +59,29 @@ struct TextLayoutIndex {
     }
 }
 
+/// A rendered document plus the index that maps it back to positions.
+///
+/// Held as a unit so the view can keep one value and rebuild it only when the
+/// inputs actually change. `revision` identifies the build; the view compares
+/// it instead of hashing the attributed string, which would walk every
+/// character of a 50-page document on each update.
+/// `@unchecked Sendable` because rendering happens off the main actor and the
+/// result is handed back across that boundary. `NSAttributedString` is not
+/// marked Sendable, but it is immutable, and nothing here mutates the value
+/// after construction -- the live highlight mutates the text view's own
+/// storage, never this.
+struct RenderedDocument: @unchecked Sendable {
+    let attributed: NSAttributedString
+    let layout: TextLayoutIndex
+    let revision: Int
+
+    static let empty = RenderedDocument(
+        attributed: NSAttributedString(string: ""),
+        layout: TextLayoutIndex(entries: [], blockRanges: [:], sentenceRanges: [:]),
+        revision: 0
+    )
+}
+
 enum DocumentTextRenderer {
     /// Build the whole document as one attributed string, plus the index that
     /// maps it back to positions.
@@ -153,6 +176,23 @@ enum DocumentTextRenderer {
         }
 
         return (output, TextLayoutIndex(entries: entries, blockRanges: blockRanges, sentenceRanges: sentenceRanges))
+    }
+
+    /// Rendering a long document is measured in tens of milliseconds, so it is
+    /// done off the main actor and handed back as one value.
+    static func renderDocument(
+        content: DocumentContent,
+        highlights: [Highlight],
+        typeface: ReadingTypeface,
+        fontSize: CGFloat,
+        theme: ReadingTheme,
+        revision: Int
+    ) -> RenderedDocument {
+        let (attributed, layout) = render(
+            content: content, highlights: highlights,
+            typeface: typeface, fontSize: fontSize, theme: theme
+        )
+        return RenderedDocument(attributed: attributed, layout: layout, revision: revision)
     }
 
     private static func font(for block: Block, typeface: ReadingTypeface, size: CGFloat) -> UIFont {

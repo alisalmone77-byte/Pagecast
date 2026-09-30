@@ -24,12 +24,13 @@ npm run build
 npm run dev           # API on :8787, web client on :5173
 ```
 
-Open <http://localhost:5173>, drop in a PDF or paste an article link, and press
-play. No credentials are needed: the default text-to-speech provider runs
-offline (see [Speech](#speech)).
+Open <http://localhost:5173> and create an account — the first one takes
+ownership of anything already in the library. Then drop in a PDF or paste an
+article link and press play. No API keys are needed: the default
+text-to-speech provider runs offline (see [Speech](#speech)).
 
 ```sh
-npm test              # 116 unit and integration tests, plus the iOS contract check
+npm test              # 165 unit and integration tests, plus the iOS contract check
 npm run typecheck     # all three TypeScript workspaces
 ```
 
@@ -95,6 +96,38 @@ model and then **normalised against the chunk's real audio duration**. Per-word
 error stays in the tens of milliseconds and, critically, cannot accumulate: the
 highlight is still locked to the voice on page 50.
 
+### Accounts
+
+Passwords are scrypt-hashed; sessions are server-side records behind an
+HttpOnly, SameSite=Lax cookie, with a bearer token for native clients. They are
+stored records rather than signed tokens because revocation has to work: this
+app gets installed on phones, and "sign out everywhere" must end the other
+device's access the moment it is pressed, which a stateless token cannot do
+without a revocation list — a session store with extra steps.
+
+Authorisation is enforced in the router, once, before any handler runs, so a
+route added later cannot forget to check. Documents carry an owner and every
+read goes through an ownership check that reports 404 rather than 403, because
+telling a stranger that an id exists but is not theirs is an enumeration oracle.
+The WebSocket upgrade authenticates from the session too — that channel carries
+one reader's positions to their other devices.
+
+Rate limiting uses two budgets. Per-account is tight. Per-address is much
+looser, because a household, office or school behind one NAT all share a source
+address, and a limit tuned for one person locks out the whole building.
+
+SameSite=Lax is what makes this safe without CSRF tokens: the browser sends the
+cookie only on top-level GET navigations, and every mutating route is a POST,
+PUT, PATCH or DELETE.
+
+### Folders
+
+One level of nesting, and no more. A reading library is browsed and recognised,
+not filed; past two levels, finding a document becomes navigation and the search
+box is faster than either. Deleting a folder never deletes documents — losing a
+book because you tidied up is not a recoverable mistake — they move up to the
+deleted folder's parent, as do any child folders.
+
 ### Sync
 
 REST is the source of truth; a WebSocket only pushes what a write already
@@ -148,15 +181,21 @@ returning `marks`; one that doesn't falls back to the fitted estimate.
 | `PAGECAST_SYNTHESIS_CONCURRENCY` | `2` | Chunks rendered at once |
 | `PAGECAST_MAX_UPLOAD_BYTES` | `64MB` | Upload limit |
 | `PAGECAST_WEB_DIR` | `apps/web/dist` | Built client, served at `/` |
+| `PAGECAST_ALLOW_REGISTRATION` | `true` | Set `false` once your accounts exist |
+| `PAGECAST_INVITE_CODE` | — | When set, sign-up also requires this code |
+| `PAGECAST_SECURE_COOKIES` | `false` | **Set `true` behind HTTPS** |
+
+`PAGECAST_SECURE_COOKIES` must be on in production and off for a plain-http
+development server: with `Secure` set over http the browser silently drops the
+cookie and every request looks signed out.
 
 Storage is JSON files with atomic writes — a deliberate trade for a
 single-reader app, keeping the server free of a database dependency while
 staying honest about durability. `apps/api/src/store.ts` is the only module
 that knows where bytes live; it is the seam to replace for multi-tenancy.
 
-Authentication is a stub: `x-pagecast-user` defaults to `local`. Reading state
-and highlights are already partitioned per user, so the change is to the header,
-not the model. **Do not expose this to the internet as it stands.**
+Accounts, sessions and folders live in the same JSON files. Sessions are swept
+of expired entries at startup.
 
 ## Keyboard shortcuts (web)
 
@@ -170,15 +209,16 @@ not the model. **Do not expose this to the internet as it stands.**
 
 ## Testing
 
-116 tests across the two TypeScript packages, plus a cross-language contract
+165 tests across the two TypeScript packages, plus a cross-language contract
 check for iOS.
 
 The interesting ones are the invariants rather than the units: that sentences
 tile every block with no gaps, that position and time round-trip through the
 timeline in both directions, that the tinted sentence always contains the
 pilled word, that estimation error cannot accumulate across a chunk boundary,
-and that concurrent writes from twelve devices converge on the furthest
-position whatever order they arrive in.
+that concurrent writes from twelve devices converge on the furthest position
+whatever order they arrive in, and that every route touching a document refuses
+another account — including the audio, which *is* the document.
 
 The web client was also driven end-to-end in Chromium against the real server,
 which is where four bugs that unit tests could not have found turned up — most
@@ -187,17 +227,20 @@ independently of it.
 
 ## Status
 
-Working and verified: ingestion for all five formats, synthesis and chunked
-delivery, the web reader with word-level tracking, cross-device sync, themes
-and typography including OpenDyslexic.
+Working and verified in a browser against the real server: accounts and
+sessions, ingestion for all five formats, synthesis and chunked delivery, the
+web reader with word-level tracking, folders, cross-device sync, themes and
+typography including OpenDyslexic.
 
 **The iOS sources have not been compiled** — they were written in a Linux
 container with no Swift toolchain. The wire contract is verified against real
 server payloads by a check that runs in `npm test`; the Swift around it has
-never seen a compiler. `apps/ios/README.md` has the detail.
+never seen a compiler. A review pass found six real defects, all fixed and
+listed in `apps/ios/README.md`.
 
-Not built: folders (the field exists and is plumbed through, nothing creates
-them), real authentication, and CloudKit sync as an alternative to REST.
+Not built: CloudKit sync as an alternative to REST, and password reset by
+email (changing a password from inside the app works, and ends every other
+session).
 
 ## Licence
 

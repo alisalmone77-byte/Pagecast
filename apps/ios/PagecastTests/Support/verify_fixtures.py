@@ -134,6 +134,38 @@ def main(directory: Path) -> int:
         "timeline duration does not match the chunk span",
     )
 
+    # Every document carries an owner. A payload without one would decode fine
+    # into the Swift model -- ownerId is optional there so pre-accounts
+    # libraries still parse -- and then silently show in the wrong library.
+    fails.check("ownerId" in document["meta"], "document metadata has no ownerId")
+
+    library = json.loads((directory / "library.json").read_text())
+    for entry in library["documents"]:
+        fails.check("ownerId" in entry, f"library entry {entry.get('id')} has no ownerId")
+        fails.check("folderId" in entry, f"library entry {entry.get('id')} has no folderId")
+
+    # Every fixture must be a success payload. An error body decodes as JSON and
+    # looks captured, so a failed request during capture is otherwise invisible
+    # until the Swift test fails on a machine that has Xcode.
+    for name, required in (
+        ("document", ("meta", "content", "state")),
+        ("library", ("documents",)),
+        ("voices", ("voices",)),
+        ("state", ("state",)),
+        ("timeline", ("voiceId", "chunks", "words")),
+        ("folders", ("folders",)),
+    ):
+        path = directory / f"{name}.json"
+        if not path.exists():
+            fails.check(False, f"{name}.json is missing")
+            continue
+        payload = json.loads(path.read_text())
+        if "error" in payload:
+            fails.check(False, f"{name}.json captured an error: {payload['error']}")
+            continue
+        for key in required:
+            fails.check(key in payload, f"{name}.json has no '{key}'")
+
     print(f"words={len(words)} blocks={len(blocks)} sentences={len(sentences)} tokens={total}")
     if fails:
         print(f"\n{len(fails)} failure(s):", file=sys.stderr)

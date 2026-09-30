@@ -1,15 +1,15 @@
 {
     "state": {
-        "documentId": "9e6fcd91-05ac-4271-936e-427bbe8d6a89",
+        "documentId": "1045fe71-c505-420e-80f0-bfce07709cb2",
         "position": {
             "blockIndex": 1,
-            "tokenIndex": 0
+            "tokenIndex": 4
         },
-        "progress": 0.041666666666666664,
-        "speed": 1,
+        "progress": 0.08333333333333333,
+        "speed": 1.5,
         "voiceId": "local-clara",
-        "rev": 11,
-        "updatedAt": "2026-09-30T10:06:11.163Z",
-        "deviceId": "web-fd1508a8"
+        "rev": 1,
+        "updatedAt": "2026-09-30T10:46:10.188Z",
+        "deviceId": "fixture-device"
     }
 }

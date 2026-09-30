@@ -31,21 +31,34 @@ final class SyncClient: ObservableObject {
         let total: Int?
     }
 
+    /// Set from the session store; the socket cannot open without it.
+    private var token: String?
+
+    func setToken(_ next: String?) {
+        guard next != token else { return }
+        token = next
+        // Reconnect under the new identity, or drop the socket on sign-out.
+        disconnect()
+        if next != nil { connect() }
+    }
+
     func connect() {
-        guard task == nil else { return }
+        guard task == nil, token != nil else { return }
         closedByUs = false
 
         let base = APIClient.shared.apiBase
         var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
         components?.scheme = (base.scheme == "https") ? "wss" : "ws"
         components?.path = "/api/sync/ws"
-        components?.queryItems = [
-            URLQueryItem(name: "user", value: APIClient.userId),
-            URLQueryItem(name: "device", value: APIClient.deviceId),
-        ]
+        // No user id in the query: the server authenticates the upgrade from
+        // the session, because this channel carries one reader's positions to
+        // their other devices.
+        components?.queryItems = [URLQueryItem(name: "device", value: APIClient.deviceId)]
         guard let url = components?.url else { return }
 
-        let socket = session.webSocketTask(with: url)
+        var request = URLRequest(url: url)
+        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
+        let socket = session.webSocketTask(with: request)
         task = socket
         socket.resume()
         isConnected = true

@@ -99,24 +99,43 @@ enum ReadingTypeface: String, CaseIterable, Identifiable {
 }
 
 /// Reading preferences, persisted across launches.
+///
+/// Backed by UserDefaults directly rather than `@AppStorage`. `@AppStorage` is
+/// a `DynamicProperty`: it only works inside a `View`, where SwiftUI installs
+/// it and drives updates. Used inside an `ObservableObject` it neither
+/// publishes changes nor reliably reads them back, so every setting here would
+/// appear to save and then silently fail to apply.
 @MainActor
 final class ReaderSettings: ObservableObject {
-    @AppStorage("pagecast.theme") private var storedTheme = ReadingTheme.light.rawValue
-    @AppStorage("pagecast.typeface") private var storedTypeface = ReadingTypeface.sans.rawValue
-    @AppStorage("pagecast.fontSize") var fontSize: Double = 19
-    @AppStorage("pagecast.autoScroll") var autoScroll = true
-    @AppStorage("pagecast.sentenceHighlight") var sentenceHighlight = true
-    @AppStorage("pagecast.speed") var speed: Double = 1
-    @AppStorage("pagecast.voiceId") var voiceId = ""
+    private let defaults: UserDefaults
 
-    var theme: ReadingTheme {
-        get { ReadingTheme(rawValue: storedTheme) ?? .light }
-        set { storedTheme = newValue.rawValue; objectWillChange.send() }
+    @Published var theme: ReadingTheme { didSet { write(theme.rawValue, "theme") } }
+    @Published var typeface: ReadingTypeface { didSet { write(typeface.rawValue, "typeface") } }
+    @Published var fontSize: Double { didSet { write(fontSize, "fontSize") } }
+    @Published var autoScroll: Bool { didSet { write(autoScroll, "autoScroll") } }
+    @Published var sentenceHighlight: Bool { didSet { write(sentenceHighlight, "sentenceHighlight") } }
+    @Published var speed: Double { didSet { write(speed, "speed") } }
+    @Published var voiceId: String { didSet { write(voiceId, "voiceId") } }
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        theme = ReadingTheme(rawValue: defaults.string(forKey: Self.key("theme")) ?? "") ?? .light
+        typeface = ReadingTypeface(rawValue: defaults.string(forKey: Self.key("typeface")) ?? "") ?? .sans
+        // `double(forKey:)` returns 0 for a missing key, which would render the
+        // document at zero point size rather than falling back.
+        let storedSize = defaults.double(forKey: Self.key("fontSize"))
+        fontSize = storedSize > 0 ? storedSize : 19
+        let storedSpeed = defaults.double(forKey: Self.key("speed"))
+        speed = storedSpeed > 0 ? storedSpeed : 1
+        autoScroll = defaults.object(forKey: Self.key("autoScroll")) as? Bool ?? true
+        sentenceHighlight = defaults.object(forKey: Self.key("sentenceHighlight")) as? Bool ?? true
+        voiceId = defaults.string(forKey: Self.key("voiceId")) ?? ""
     }
 
-    var typeface: ReadingTypeface {
-        get { ReadingTypeface(rawValue: storedTypeface) ?? .sans }
-        set { storedTypeface = newValue.rawValue; objectWillChange.send() }
+    private static func key(_ name: String) -> String { "pagecast.\(name)" }
+
+    private func write(_ value: Any, _ name: String) {
+        defaults.set(value, forKey: Self.key(name))
     }
 }
 

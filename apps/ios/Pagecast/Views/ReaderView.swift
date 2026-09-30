@@ -47,8 +47,6 @@ final class ReaderModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    deinit { pollTask?.cancel() }
-
     func load(settings: ReaderSettings) async {
         isLoading = true
         do {
@@ -70,6 +68,9 @@ final class ReaderModel: ObservableObject {
 
             isLoading = false
             await startSynthesis(settings: settings, resumeFrom: document.state.position)
+        } catch let error as APIError where error.isUnauthorized {
+            await SessionStore.shared.signOutLocally()
+            isLoading = false
         } catch {
             errorMessage = error.localizedDescription
             isLoading = false
@@ -245,6 +246,9 @@ struct ReaderView: View {
 
     @EnvironmentObject private var settings: ReaderSettings
     @StateObject private var model: ReaderModel
+    /// Built once per document/appearance change, never per frame.
+    @State private var rendered: RenderedDocument = .empty
+    @State private var renderRevision = 0
     @State private var showingAudioSheet = false
     @State private var showingSettings = false
     @State private var pendingSelection: (ReadingPosition, ReadingPosition)?
@@ -259,18 +263,11 @@ struct ReaderView: View {
         ZStack(alignment: .bottom) {
             settings.theme.background.ignoresSafeArea()
 
-            if let document = model.document {
-                let rendered = DocumentTextRenderer.render(
-                    content: document.content,
-                    highlights: document.highlights,
-                    typeface: settings.typeface,
-                    fontSize: settings.fontSize,
-                    theme: settings.theme
-                )
-
+            if model.document != nil {
                 TrackingTextView(
-                    attributed: rendered.0,
-                    layout: rendered.1,
+                    attributed: rendered.attributed,
+                    revision: rendered.revision,
+                    layout: rendered.layout,
                     theme: settings.theme,
                     activePosition: model.activeSpan?.position,
                     activeSentence: model.activeSpan?.sentenceIndex,
@@ -307,7 +304,9 @@ struct ReaderView: View {
                         model.handoff = nil
                     }
                 }
-                MiniPlayer(model: model, theme: settings.theme) { showingAudioSheet = true }
+                MiniPlayer(model: model, engine: model.engine, theme: settings.theme) {
+                    showingAudioSheet = true
+                }
             }
         }
         .navigationTitle(meta.title)
@@ -318,7 +317,7 @@ struct ReaderView: View {
             }
         }
         .sheet(isPresented: $showingAudioSheet) {
-            AudioSheet(model: model).environmentObject(settings)
+            AudioSheet(model: model, engine: model.engine).environmentObject(settings)
         }
         .sheet(isPresented: $showingSettings) {
             ReadingSettingsSheet().environmentObject(settings)
@@ -340,6 +339,39 @@ struct ReaderView: View {
             Button("Cancel", role: .cancel) { pendingSelection = nil }
         }
         .task { await model.load(settings: settings) }
+        // Re-render only when something that affects the text changes. The
+        // active word is deliberately not in this key: it moves several times a
+        // second and is applied by mutating attributes, not by rebuilding.
+        .task(id: RenderKey(
+            documentId: model.document?.meta.id ?? "",
+            highlights: model.document?.highlights.count ?? 0,
+            typeface: settings.typeface,
+            fontSize: settings.fontSize,
+            theme: settings.theme
+        )) {
+            guard let document = model.document else { return }
+            renderRevision += 1
+            let revision = renderRevision
+            let typeface = settings.typeface
+            let fontSize = settings.fontSize
+            let theme = settings.theme
+            let content = document.content
+            let highlights = document.highlights
+
+            // Tens of milliseconds on a long document: off the main actor so
+            // opening a book does not drop frames.
+            let next = await Task.detached(priority: .userInitiated) {
+                DocumentTextRenderer.renderDocument(
+                    content: content, highlights: highlights,
+                    typeface: typeface, fontSize: fontSize,
+                    theme: theme, revision: revision
+                )
+            }.value
+
+            // A newer render may have finished first if settings were changed
+            // twice in quick succession.
+            if next.revision >= rendered.revision { rendered = next }
+        }
         .onDisappear { model.teardown() }
         .preferredColorScheme(settings.theme.colorScheme)
         .tint(settings.theme.accent)
@@ -349,6 +381,9 @@ struct ReaderView: View {
 /// Persistent mini-player, matching the spec's home-screen dock.
 private struct MiniPlayer: View {
     @ObservedObject var model: ReaderModel
+    /// Observed directly: `PlaybackEngine` is its own ObservableObject, and a
+    /// view watching only `model` never hears the playhead move.
+    @ObservedObject var engine: PlaybackEngine
     let theme: ReadingTheme
     let onExpand: () -> Void
 
@@ -357,7 +392,7 @@ private struct MiniPlayer: View {
             Button {
                 Task { await model.toggle() }
             } label: {
-                Image(systemName: model.engine.isPlaying ? "pause.fill" : "play.fill")
+                Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
                     .font(.title3)
                     .frame(width: 44, height: 44)
                     .background(theme.accent, in: Circle())
@@ -371,7 +406,7 @@ private struct MiniPlayer: View {
                         .font(.caption)
                         .foregroundStyle(theme.secondaryText)
                 } else {
-                    Text("\(model.engine.mediaMs.asPlaybackTime) / \(model.engine.durationMs.asPlaybackTime)")
+                    Text("\(engine.mediaMs.asPlaybackTime) / \(engine.durationMs.asPlaybackTime)")
                         .font(.caption)
                         .monospacedDigit()
                         .foregroundStyle(theme.secondaryText)
@@ -380,7 +415,7 @@ private struct MiniPlayer: View {
             }
 
             Button(action: onExpand) {
-                Text(String(format: "%.1f×", model.engine.speed))
+                Text(String(format: "%.1f×", engine.speed))
                     .font(.caption.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(theme.accent)
@@ -412,4 +447,16 @@ private struct HandoffBanner: View {
         .padding(.vertical, 10)
         .background(theme.accent.opacity(0.15))
     }
+}
+
+
+/// The inputs that change what the rendered text looks like. Deliberately does
+/// not include the active word: that moves several times a second and is
+/// applied by mutating attributes rather than rebuilding the document.
+private struct RenderKey: Equatable {
+    let documentId: String
+    let highlights: Int
+    let typeface: ReadingTypeface
+    let fontSize: Double
+    let theme: ReadingTheme
 }

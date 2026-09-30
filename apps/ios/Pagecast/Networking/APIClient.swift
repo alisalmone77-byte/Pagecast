@@ -5,6 +5,7 @@ import Foundation
 
 enum APIError: LocalizedError {
     case badStatus(Int, String)
+    case unauthorized
     case transport(Error)
     case decoding(Error)
 
@@ -12,12 +13,47 @@ enum APIError: LocalizedError {
         switch self {
         case let .badStatus(code, message):
             return message.isEmpty ? "The server returned \(code)." : message
+        case .unauthorized:
+            return "Your session has ended. Sign in again to continue."
         case let .transport(error):
             return error.localizedDescription
         case .decoding:
             return "The server sent something this version of Pagecast does not understand."
         }
     }
+
+    /// True when the session is gone and the UI should return to sign-in.
+    var isUnauthorized: Bool {
+        if case .unauthorized = self { return true }
+        return false
+    }
+}
+
+struct PublicUser: Decodable, Identifiable, Equatable {
+    let id: String
+    let email: String
+    let displayName: String
+    let createdAt: String
+}
+
+struct AuthResult: Decodable {
+    let user: PublicUser
+    let token: String
+}
+
+struct AuthConfig: Decodable {
+    let allowRegistration: Bool
+    let requiresInvite: Bool
+    let hasAccounts: Bool
+}
+
+struct FolderSummary: Decodable, Identifiable, Equatable {
+    let id: String
+    let name: String
+    let parentId: String?
+    let sortOrder: Int
+    let documentCount: Int
+    let totalCount: Int
 }
 
 struct FullDocument: Decodable {
@@ -62,7 +98,10 @@ actor APIClient {
         return created
     }()
 
-    nonisolated static let userId = "local"
+    /// The session token, sent as a bearer credential. URLSession has its own
+    /// cookie jar, but the token is carried explicitly so the share extension
+    /// -- a separate process with a separate jar -- authenticates the same way.
+    private var token: String?
 
     init(baseURL: URL? = nil, session: URLSession = .shared) {
         if let baseURL {
@@ -76,6 +115,24 @@ actor APIClient {
 
     nonisolated var apiBase: URL { baseURL }
 
+    nonisolated func setToken(_ token: String?) {
+        Task { await self.storeToken(token) }
+    }
+
+    private func storeToken(_ next: String?) {
+        token = next
+    }
+
+    /// Set the token and wait for it to land. `setToken` is fire-and-forget,
+    /// which is right in the app but not in the share extension, where the
+    /// very next call is the authenticated one.
+    func setTokenAndWait(_ next: String?) {
+        token = next
+    }
+
+    /// Exposed so the sync socket can authenticate its upgrade request.
+    func currentToken() -> String? { token }
+
     // MARK: - Requests
 
     private func request(_ method: String, _ path: String, body: Data? = nil,
@@ -86,7 +143,7 @@ actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue(Self.deviceId, forHTTPHeaderField: "x-pagecast-device")
-        request.setValue(Self.userId, forHTTPHeaderField: "x-pagecast-user")
+        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
         for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
         if let body {
             request.httpBody = body
@@ -120,12 +177,72 @@ actor APIClient {
             throw APIError.badStatus(0, "The response was not HTTP.")
         }
         guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 401 { throw APIError.unauthorized }
             // The server reports failures as { "error": "..." }.
             struct ErrorBody: Decodable { let error: String? }
             let message = (try? JSONDecoder().decode(ErrorBody.self, from: data))?.error
             throw APIError.badStatus(http.statusCode, message ?? "")
         }
         return data
+    }
+
+    // MARK: - Authentication
+
+    func authConfig() async throws -> AuthConfig {
+        try await send(request("GET", "/api/auth/config"), as: AuthConfig.self)
+    }
+
+    func me() async throws -> PublicUser {
+        struct Response: Decodable { let user: PublicUser }
+        return try await send(request("GET", "/api/auth/me"), as: Response.self).user
+    }
+
+    func login(email: String, password: String) async throws -> AuthResult {
+        let body = try encoder.encode(["email": email, "password": password])
+        return try await send(request("POST", "/api/auth/login", body: body), as: AuthResult.self)
+    }
+
+    func register(email: String, password: String,
+                  displayName: String?, inviteCode: String?) async throws -> AuthResult {
+        struct Body: Encodable {
+            let email: String
+            let password: String
+            let displayName: String?
+            let inviteCode: String?
+        }
+        let body = try encoder.encode(
+            Body(email: email, password: password, displayName: displayName, inviteCode: inviteCode)
+        )
+        return try await send(request("POST", "/api/auth/register", body: body), as: AuthResult.self)
+    }
+
+    func logout() async throws {
+        try await sendRaw(request("POST", "/api/auth/logout"))
+    }
+
+    // MARK: - Folders
+
+    func folders() async throws -> (folders: [FolderSummary], unfiled: Int) {
+        struct Response: Decodable { let folders: [FolderSummary]; let unfiled: Int }
+        let response = try await send(request("GET", "/api/folders"), as: Response.self)
+        return (response.folders, response.unfiled)
+    }
+
+    func createFolder(name: String, parentId: String?) async throws -> FolderSummary {
+        struct Body: Encodable { let name: String; let parentId: String? }
+        struct Response: Decodable { let folder: FolderSummary }
+        let body = try encoder.encode(Body(name: name, parentId: parentId))
+        return try await send(request("POST", "/api/folders", body: body), as: Response.self).folder
+    }
+
+    func deleteFolder(_ id: String) async throws {
+        try await sendRaw(request("DELETE", "/api/folders/\(id)"))
+    }
+
+    func move(documentIds: [String], toFolder folderId: String?) async throws {
+        struct Body: Encodable { let documentIds: [String]; let folderId: String? }
+        let body = try encoder.encode(Body(documentIds: documentIds, folderId: folderId))
+        try await sendRaw(request("POST", "/api/folders/move", body: body))
     }
 
     // MARK: - Documents

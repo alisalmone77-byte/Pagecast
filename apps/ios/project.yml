@@ -29,6 +29,7 @@ targets:
     settings:
       base:
         INFOPLIST_FILE: Pagecast/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Pagecast/Pagecast.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.pagecast.app
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: NO
@@ -49,6 +50,7 @@ targets:
     settings:
       base:
         INFOPLIST_FILE: PagecastShareExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PagecastShareExtension/PagecastShareExtension.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.pagecast.app.share
 
   PagecastTests:

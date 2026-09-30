@@ -79,6 +79,24 @@ final class ModelDecodingTests: XCTestCase {
         }
     }
 
+    func testDocumentsCarryAnOwner() throws {
+        // `ownerId` is optional in the Swift model so a library created before
+        // accounts existed still parses. A payload from a current server must
+        // always have one, or documents would silently show in the wrong place.
+        let document = try JSONDecoder().decode(FullDocument.self, from: fixture("document"))
+        XCTAssertNotNil(document.meta.ownerId)
+    }
+
+    func testDecodesFoldersAndAuthPayloads() throws {
+        struct FolderResponse: Decodable { let folders: [FolderSummary]; let unfiled: Int }
+        let folders = try JSONDecoder().decode(FolderResponse.self, from: fixture("folders"))
+        XCTAssertGreaterThanOrEqual(folders.unfiled, 0)
+        for folder in folders.folders {
+            XCTAssertFalse(folder.name.isEmpty)
+            XCTAssertGreaterThanOrEqual(folder.totalCount, folder.documentCount)
+        }
+    }
+
     func testDecodesTimelineAndLibraryAndVoices() throws {
         let timeline = try JSONDecoder().decode(Timeline.self, from: fixture("timeline"))
         XCTAssertFalse(timeline.chunks.isEmpty)
@@ -95,6 +113,7 @@ final class ModelDecodingTests: XCTestCase {
         struct StateResponse: Decodable { let state: ReadingState }
         let state = try JSONDecoder().decode(StateResponse.self, from: fixture("state"))
         XCTAssertGreaterThanOrEqual(state.state.rev, 0)
+        XCTAssertFalse(state.state.voiceId.isEmpty)
     }
 }
 

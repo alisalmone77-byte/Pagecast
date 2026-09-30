@@ -2,9 +2,29 @@ import SwiftUI
 
 //  Screen 1: Library and quick launch.
 
+/// Which slice of the library is showing.
+///
+/// An explicit enum rather than the `String??` this started as: a double
+/// optional where `.some(nil)` means Unfiled and `nil` means no filter is
+/// technically expressible but reads as a puzzle, and one misplaced `.some`
+/// silently shows the wrong documents.
+enum FolderFilter: Hashable {
+    case all
+    case unfiled
+    case folder(String)
+
+    var folderId: String? {
+        if case let .folder(id) = self { return id }
+        return nil
+    }
+}
+
 @MainActor
 final class LibraryModel: ObservableObject {
     @Published var entries: [LibraryEntry] = []
+    @Published var folders: [FolderSummary] = []
+    @Published var unfiled = 0
+    @Published var selectedFolder: FolderFilter = .all
     @Published var isLoading = true
     @Published var errorMessage: String?
     @Published var search = ""
@@ -15,20 +35,52 @@ final class LibraryModel: ObservableObject {
             .max { ($0.state?.updatedAt ?? "") < ($1.state?.updatedAt ?? "") }
     }
 
+    /// Folders ordered for a picker: each parent immediately followed by its
+    /// own children, so the indent points at something.
+    var orderedFolders: [(folder: FolderSummary, depth: Int)] {
+        var out: [(FolderSummary, Int)] = []
+        for root in folders.filter({ $0.parentId == nil }) {
+            out.append((root, 0))
+            for child in folders.filter({ $0.parentId == root.id }) { out.append((child, 1)) }
+        }
+        return out
+    }
+
     var recents: [LibraryEntry] {
         let needle = search.trimmingCharacters(in: .whitespaces).lowercased()
-        let filtered = needle.isEmpty ? entries : entries.filter {
+        var filtered = needle.isEmpty ? entries : entries.filter {
             $0.meta.title.lowercased().contains(needle)
                 || ($0.meta.author?.lowercased().contains(needle) ?? false)
         }
+        switch selectedFolder {
+        case .all: break
+        case .unfiled: filtered = filtered.filter { $0.meta.folderId == nil }
+        case let .folder(id): filtered = filtered.filter { $0.meta.folderId == id }
+        }
         return filtered.sorted { $0.meta.updatedAt > $1.meta.updatedAt }
+    }
+
+    var currentFolderName: String? {
+        switch selectedFolder {
+        case .all: return nil
+        case .unfiled: return "Unfiled"
+        case let .folder(id): return folders.first { $0.id == id }?.name
+        }
     }
 
     func load() async {
         isLoading = entries.isEmpty
         do {
-            entries = try await APIClient.shared.library()
+            async let documents = APIClient.shared.library()
+            async let folderList = APIClient.shared.folders()
+            entries = try await documents
+            let loaded = try await folderList
+            folders = loaded.folders
+            unfiled = loaded.unfiled
             errorMessage = nil
+        } catch let error as APIError where error.isUnauthorized {
+            // The session ended elsewhere; the app returns to sign-in.
+            await SessionStore.shared.signOutLocally()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -45,15 +97,50 @@ final class LibraryModel: ObservableObject {
             entries = previous
             errorMessage = error.localizedDescription
         }
+        await load()
+    }
+
+    func move(_ entry: LibraryEntry, to folderId: String?) async {
+        do {
+            try await APIClient.shared.move(documentIds: [entry.id], toFolder: folderId)
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func createFolder(named name: String) async {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        do {
+            _ = try await APIClient.shared.createFolder(name: trimmed, parentId: nil)
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func deleteFolder(_ id: String) async {
+        do {
+            try await APIClient.shared.deleteFolder(id)
+            if selectedFolder == .folder(id) { selectedFolder = .all }
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
 struct LibraryView: View {
     @EnvironmentObject private var settings: ReaderSettings
+    @EnvironmentObject private var session: SessionStore
     @StateObject private var model = LibraryModel()
+    @State private var showingNewFolder = false
+    @State private var newFolderName = ""
     @State private var showingAdd = false
     @State private var showingScanner = false
     @State private var selection: DocumentMeta?
+    @State private var movingEntry: LibraryEntry?
 
     var body: some View {
         NavigationStack {
@@ -83,6 +170,16 @@ struct LibraryView: View {
                                         Label("Delete", systemImage: "trash")
                                     }
                                 }
+                                .swipeActions(edge: .leading) {
+                                    if !model.folders.isEmpty {
+                                        Button {
+                                            movingEntry = entry
+                                        } label: {
+                                            Label("Move", systemImage: "folder")
+                                        }
+                                        .tint(settings.theme.accent)
+                                    }
+                                }
                         }
                     } else if !model.isLoading {
                         EmptyLibrary(theme: settings.theme) { showingScanner = true }
@@ -92,9 +189,35 @@ struct LibraryView: View {
             }
             .background(settings.theme.background)
             .scrollContentBackground(.hidden)
-            .navigationTitle("Pagecast")
+            .navigationTitle(model.currentFolderName ?? "Pagecast")
             .searchable(text: $model.search, prompt: "Search your library")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Picker("Folder", selection: $model.selectedFolder) {
+                            Text("All documents").tag(FolderFilter.all)
+                            Text("Unfiled (\(model.unfiled))").tag(FolderFilter.unfiled)
+                            ForEach(model.orderedFolders, id: \.folder.id) { entry in
+                                Text(entry.depth > 0 ? "   \(entry.folder.name)" : entry.folder.name)
+                                    .tag(FolderFilter.folder(entry.folder.id))
+                            }
+                        }
+                        Divider()
+                        Button { showingNewFolder = true } label: {
+                            Label("New folder", systemImage: "folder.badge.plus")
+                        }
+                        if let id = model.selectedFolder.folderId {
+                            Button(role: .destructive) {
+                                Task { await model.deleteFolder(id) }
+                            } label: {
+                                Label("Delete this folder", systemImage: "trash")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: model.selectedFolder == .all ? "folder" : "folder.fill")
+                    }
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button { showingScanner = true } label: {
@@ -103,10 +226,26 @@ struct LibraryView: View {
                         Button { showingAdd = true } label: {
                             Label("Add link or text", systemImage: "link")
                         }
+                        Divider()
+                        if let user = session.user {
+                            Text(user.email)
+                        }
+                        Button(role: .destructive) {
+                            Task { await session.signOut() }
+                        } label: {
+                            Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
                     } label: {
                         Image(systemName: "plus")
                     }
                 }
+            }
+            .alert("New folder", isPresented: $showingNewFolder) {
+                TextField("Name", text: $newFolderName)
+                Button("Create") {
+                    Task { await model.createFolder(named: newFolderName); newFolderName = "" }
+                }
+                Button("Cancel", role: .cancel) { newFolderName = "" }
             }
             .refreshable { await model.load() }
             .task { await model.load() }
@@ -120,6 +259,24 @@ struct LibraryView: View {
                     selection = meta
                     Task { await model.load() }
                 }
+            }
+            .confirmationDialog(
+                "Move to folder",
+                isPresented: Binding(get: { movingEntry != nil }, set: { if !$0 { movingEntry = nil } })
+            ) {
+                Button("Unfiled") {
+                    if let entry = movingEntry { Task { await model.move(entry, to: nil) } }
+                    movingEntry = nil
+                }
+                ForEach(model.orderedFolders, id: \.folder.id) { entry in
+                    Button(entry.folder.name) {
+                        if let moving = movingEntry {
+                            Task { await model.move(moving, to: entry.folder.id) }
+                        }
+                        movingEntry = nil
+                    }
+                }
+                Button("Cancel", role: .cancel) { movingEntry = nil }
             }
             .sheet(isPresented: $showingAdd) {
                 AddSourceSheet { meta in

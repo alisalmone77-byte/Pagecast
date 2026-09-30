@@ -7,13 +7,38 @@ sheet — plus a Safari share extension and lock-screen controls.
 ## Status
 
 **These sources have not been compiled.** They were written in a Linux
-container with no Swift toolchain and no Xcode, so they carry the usual risk of
-uncompiled code: a missing `await`, an API renamed since the model's training
-data, a `Sendable` complaint under strict concurrency. Expect to fix a handful
-of diagnostics on the first build. Nothing here has run on a device.
+container with no Swift toolchain and no Xcode. Expect to fix some diagnostics
+on the first build; nothing here has run on a device.
 
-What *has* been verified is the part that can be, and it is the part most
-likely to break silently: the wire contract with the server. See
+They have been through a careful review pass since, which found and fixed six
+real defects. They are listed because they are the kinds of thing that compile
+cleanly and then behave wrongly, so they are worth knowing about if you are
+reading this code:
+
+- `ReaderSettings` used `@AppStorage` inside an `ObservableObject`.
+  `@AppStorage` is a `DynamicProperty`: it only works inside a `View`, where
+  SwiftUI installs it. Every reading preference would have appeared to save and
+  then silently failed to apply. Now backed by `UserDefaults` directly.
+- `ReaderView` rebuilt the entire document's `NSAttributedString` inside `body`.
+  Since the active word is `@Published`, that meant re-rendering a 50-page
+  document several times a second. Now built once per document or appearance
+  change, off the main actor.
+- The mini-player and audio sheet read playback state through `ReaderModel`, so
+  nothing observed `PlaybackEngine` and the clock and scrubber never moved.
+  They observe the engine directly now. (The web client had the same bug.)
+- `TrackingTextView` touched `layoutManager`, which silently falls a TextKit 2
+  view back to TextKit 1 — after paying for TextKit 2 layout on open. It now
+  opts into TextKit 1 explicitly, which is what the tap handling and
+  auto-scroll actually need.
+- The coordinator compared `NSAttributedString.hashValue` to decide whether to
+  replace the text, which walks every character of the document on each update.
+  It compares an explicit revision counter instead.
+- The folder filter was a `String??`, where `.some(nil)` meant Unfiled and
+  `nil` meant no filter. One misplaced `.some` shows the wrong documents; it is
+  an explicit enum now.
+
+What *is* verified is the part that can be, and it is the part most likely to
+break silently: the wire contract with the server. See
 [Verification](#verification) below.
 
 ## Building
@@ -32,6 +57,11 @@ Point the app at your server by editing `PAGECAST_API_BASE` in
 `Pagecast/Info.plist` (and the same key in the extension's plist). It defaults
 to `http://localhost:8787`, which works in the simulator against
 `npm run dev:api`. On a physical device use your machine's LAN address.
+
+Both targets share a keychain group so the share extension can use the signed-in
+session without asking anyone to sign in twice. Set your team's prefix on the
+`keychain-access-groups` entitlement in both `.entitlements` files, or sharing
+from Safari will report that you need to sign in.
 
 `NSAllowsLocalNetworking` is set so a plaintext development server works.
 A production build talks to https and should drop that key.
@@ -98,4 +128,12 @@ article is waiting in the library next time Pagecast is opened.
 **Audio chunks cache to disk forever.** A given document, voice and chunk index
 always produces the same audio, so cached chunks are immutable and only evicted
 for space. A commute is exactly when someone wants this app and exactly when
-the network is worst.
+the network is worst. Signing out clears the cache, because it is someone
+else's reading.
+
+**The session token lives in the keychain, not `UserDefaults`.** `UserDefaults`
+is a plist in the app container: readable from a file-system backup, and not
+protected while the device is locked. `kSecAttrAccessibleAfterFirstUnlock`
+keeps the token available to background audio and background sync after the
+first unlock following a reboot, without leaving it readable on a device that
+has never been unlocked.

@@ -43,6 +43,14 @@ final class ShareViewController: UIViewController {
     }
 
     private func handleSharedItem() async {
+        // The extension is a separate process with its own container; the
+        // session token reaches it through the shared keychain group.
+        guard let token = await SessionStore.shared.token else {
+            await finish(message: "Open Pagecast and sign in first.", success: false)
+            return
+        }
+        await APIClient.shared.setTokenAndWait(token)
+
         guard let shared = await extractURL() else {
             await finish(message: "Pagecast could not find a link to add.", success: false)
             return
@@ -50,6 +58,8 @@ final class ShareViewController: UIViewController {
         do {
             _ = try await APIClient.shared.ingest(url: shared.absoluteString)
             await finish(message: "Added to Pagecast.", success: true)
+        } catch let error as APIError where error.isUnauthorized {
+            await finish(message: "Your session has ended. Open Pagecast and sign in again.", success: false)
         } catch {
             await finish(message: error.localizedDescription, success: false)
         }
