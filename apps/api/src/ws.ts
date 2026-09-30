@@ -72,12 +72,18 @@ export class SyncHub {
     }
 
     const accept = createHash('sha1').update(key + GUID).digest('base64');
-    socket.write(
-      'HTTP/1.1 101 Switching Protocols\r\n' +
-      'Upgrade: websocket\r\n' +
-      'Connection: Upgrade\r\n' +
-      `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-    );
+    try {
+      socket.write(
+        'HTTP/1.1 101 Switching Protocols\r\n' +
+        'Upgrade: websocket\r\n' +
+        'Connection: Upgrade\r\n' +
+        `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
+      );
+    } catch {
+      // The client reset between the upgrade request and this reply.
+      socket.destroy();
+      return;
+    }
     // Position updates are small and latency-sensitive: do not wait on Nagle.
     if ('setNoDelay' in socket && typeof socket.setNoDelay === 'function') socket.setNoDelay(true);
 
@@ -151,7 +157,7 @@ export class SyncHub {
           this.onMessage(client, frame.payload.toString('utf8'));
           break;
         case OP_PING:
-          client.socket.write(encodeFrame(OP_PONG, frame.payload));
+          this.write(client, encodeFrame(OP_PONG, frame.payload));
           break;
         case OP_PONG:
           client.alive = true;
@@ -196,9 +202,17 @@ export class SyncHub {
   }
 
   private send(client: Client, message: ServerMessage): void {
-    if (client.socket.destroyed) return;
+    this.write(client, encodeFrame(OP_TEXT, Buffer.from(JSON.stringify(message), 'utf8')));
+  }
+
+  /** Every write goes through here: a socket can die between any two frames. */
+  private write(client: Client, frame: Buffer): void {
+    if (client.socket.destroyed || !client.socket.writable) {
+      this.drop(client);
+      return;
+    }
     try {
-      client.socket.write(encodeFrame(OP_TEXT, Buffer.from(JSON.stringify(message), 'utf8')));
+      client.socket.write(frame);
     } catch {
       this.drop(client);
     }
@@ -230,11 +244,7 @@ export class SyncHub {
           continue;
         }
         client.alive = false;
-        try {
-          client.socket.write(encodeFrame(OP_PING, Buffer.alloc(0)));
-        } catch {
-          this.drop(client);
-        }
+        this.write(client, encodeFrame(OP_PING, Buffer.alloc(0)));
       }
     }, PING_INTERVAL_MS);
     this.heartbeat.unref();

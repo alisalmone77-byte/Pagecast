@@ -325,6 +325,52 @@ test('an upgrade on the wrong path is refused', async () => {
   socket.destroy();
 });
 
+test('a socket reset during the handshake does not take the server down', async () => {
+  // An upgrade hands over a raw socket with no error handling of its own. A
+  // client that connects and immediately resets used to raise an unhandled
+  // 'error' event and kill the process -- a crash anyone on the network could
+  // trigger at will.
+  const reset = (withAuth, delayMs) => new Promise((resolve) => {
+    const socket = net.connect(port, '127.0.0.1');
+    socket.on('error', () => {});
+    socket.on('connect', () => {
+      socket.write(
+        'GET /api/sync/ws?device=reset HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\n' +
+        `Connection: Upgrade\r\n${withAuth ? `Authorization: Bearer ${token}\r\n` : ''}` +
+        `Sec-WebSocket-Key: ${randomBytes(16).toString('base64')}\r\n` +
+        'Sec-WebSocket-Version: 13\r\n\r\n',
+      );
+      setTimeout(() => { socket.resetAndDestroy(); resolve(); }, delayMs);
+    });
+    setTimeout(resolve, 300);
+  });
+
+  for (let i = 0; i < 6; i += 1) await reset(i % 2 === 0, i % 3);
+  await new Promise((r) => setTimeout(r, 300));
+
+  const res = await fetch(`http://127.0.0.1:${port}/api/health`);
+  assert.equal(res.status, 200, 'the server must still be answering');
+
+  // And it must still work, not merely be alive.
+  const client = await connect('?device=after-reset');
+  assert.equal((await client.next()).type, 'hello');
+  client.close();
+});
+
+test('a malformed request gets a 400 rather than killing the process', async () => {
+  const socket = net.connect(port, '127.0.0.1');
+  socket.on('error', () => {});
+  await new Promise((resolve) => socket.once('connect', resolve));
+  socket.write('NOT-HTTP \x00 garbage\r\n\r\n');
+  const response = await new Promise((resolve) => {
+    socket.once('data', (d) => resolve(d.toString()));
+    setTimeout(() => resolve(''), 1000);
+  });
+  socket.destroy();
+  assert.match(response, /400/);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/health`)).status, 200);
+});
+
 test('malformed JSON over the socket gets an error, not a dropped connection', async () => {
   const client = await connect('?device=laptop');
   await client.next();

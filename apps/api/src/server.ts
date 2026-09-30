@@ -78,6 +78,15 @@ export function createServer(): http.Server {
   });
 
   server.on('upgrade', (req, socket, head) => {
+    // Before anything else, and before the first await below.
+    //
+    // An upgrade hands over a raw socket with no error handling of its own --
+    // unlike a normal request, where the http server keeps one. An unhandled
+    // 'error' event on a stream throws, so a client that connects and then
+    // resets during the handshake took the whole process down with it. That is
+    // a crash anyone on the network can trigger at will.
+    socket.on('error', () => socket.destroy());
+
     const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
     if (pathname !== '/api/sync/ws') {
       socket.end('HTTP/1.1 404 Not Found\r\n\r\n');
@@ -88,14 +97,35 @@ export function createServer(): http.Server {
     // from the session exactly like an HTTP route -- not from a user id in the
     // query string, which anyone could type.
     void (async () => {
-      const token = sessionTokenFrom(req);
-      const resolved = token ? await store.resolveSession(token) : null;
-      if (!resolved) {
-        socket.end('HTTP/1.1 401 Unauthorized\r\n\r\n');
-        return;
+      try {
+        const token = sessionTokenFrom(req);
+        const resolved = token ? await store.resolveSession(token) : null;
+        // The client may well have gone away during that lookup.
+        if (socket.destroyed || !socket.writable) {
+          socket.destroy();
+          return;
+        }
+        if (!resolved) {
+          socket.end('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          return;
+        }
+        hub.handleUpgrade(req, socket, head, resolved.user.id);
+      } catch (err) {
+        console.warn('[ws] upgrade failed:', err instanceof Error ? err.message : err);
+        socket.destroy();
       }
-      hub.handleUpgrade(req, socket, head, resolved.user.id);
     })();
+  });
+
+  // A malformed request line or header. Node hands it over rather than
+  // answering, and destroying the socket without a reply would be a silent
+  // hang for anything that was merely confused rather than hostile.
+  server.on('clientError', (err: NodeJS.ErrnoException, socket) => {
+    if (err.code === 'ECONNRESET' || !socket.writable) {
+      socket.destroy();
+      return;
+    }
+    socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
   });
 
   return server;
