@@ -44,6 +44,8 @@ export function wordCost(word: string): number {
 export interface TimingPlanEntry {
   readonly blockIndex: number;
   readonly tokenIndex: number;
+  /** The word itself, so a provider can mark it up without re-reading the block. */
+  readonly text: string;
   /** Unitless speaking cost. */
   readonly cost: number;
   /** Silence that follows this word, in ms. */
@@ -83,7 +85,13 @@ export function planSentences(
       else if (/,/.test(gap)) pauseMs = PAUSE_COMMA;
       else if (/[;:—–()\[\]]/.test(gap)) pauseMs = PAUSE_CLAUSE;
 
-      plan.push({ blockIndex: block.index, tokenIndex: t, cost: wordCost(token.text), pauseMs });
+      plan.push({
+        blockIndex: block.index,
+        tokenIndex: t,
+        text: token.text,
+        cost: wordCost(token.text),
+        pauseMs,
+      });
     }
   }
   return plan;

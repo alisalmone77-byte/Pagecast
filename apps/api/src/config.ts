@@ -25,6 +25,11 @@ export const config = {
     openaiApiKey: process.env['OPENAI_API_KEY'] ?? '',
     openaiModel: env('PAGECAST_OPENAI_TTS_MODEL', 'gpt-4o-mini-tts'),
     openaiBaseUrl: env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+    /**
+     * Google Cloud Text-to-Speech. The only provider here that reports real
+     * word boundaries, so its timelines are measured rather than estimated.
+     */
+    googleApiKey: process.env['GOOGLE_TTS_API_KEY'] ?? '',
   },
   /** How many chunks are synthesised at once. */
   synthesisConcurrency: Number(env('PAGECAST_SYNTHESIS_CONCURRENCY', '2')),

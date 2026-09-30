@@ -5,6 +5,7 @@ import {
 import { config } from '../config.js';
 import { HttpError } from '../http.js';
 import { store } from '../store.js';
+import { GoogleTtsProvider } from './google.js';
 import { LocalTtsProvider } from './local.js';
 import { OpenAiTtsProvider } from './openai.js';
 import type { TtsProvider } from './types.js';
@@ -21,6 +22,9 @@ let provider: TtsProvider | null = null;
 export function getProvider(): TtsProvider {
   if (provider) return provider;
   switch (config.tts.provider) {
+    case 'google':
+      provider = new GoogleTtsProvider();
+      break;
     case 'openai':
       provider = new OpenAiTtsProvider();
       break;
