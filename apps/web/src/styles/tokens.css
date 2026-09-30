@@ -1,0 +1,166 @@
+/*
+ * Design tokens.
+ *
+ * Three reading themes, each a complete palette rather than a filter over one
+ * base, because the point of sepia and dark is that the *relationship* between
+ * text and page changes, not just the brightness. Colours are declared on
+ * [data-theme] so a theme switch is one attribute write with no reflow of
+ * component state.
+ */
+
+:root {
+  /* Typography ---------------------------------------------------------- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --font-serif: 'Merriweather', 'New York', Georgia, 'Times New Roman', serif;
+  /*
+   * OpenDyslexic is loaded from the network when present and falls back to
+   * Comic Sans MS, which shares the asymmetric letterforms that make the
+   * typeface useful and is installed nearly everywhere.
+   */
+  --font-dyslexic: 'OpenDyslexic', 'Comic Sans MS', 'Trebuchet MS', var(--font-sans);
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --reading-font: var(--font-sans);
+  --reading-size: 19px;
+  --reading-leading: 1.75;
+  --reading-measure: 34rem;
+  --reading-tracking: 0;
+
+  /* Spacing and shape --------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  --dock-height: 84px;
+  --navbar-height: 60px;
+  --sidebar-width: 236px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --transition-fast: 120ms var(--ease-out);
+  --transition-base: 220ms var(--ease-out);
+}
+
+/* Light: warm white, per the spec, so the page is not a lightbulb. --------- */
+:root,
+[data-theme='light'] {
+  --bg: #fafaf9;
+  --bg-raised: #ffffff;
+  --bg-sunken: #f2f1ef;
+  --bg-hover: rgba(28, 25, 23, 0.045);
+  --text: #1c1917;
+  --text-muted: #6b6560;
+  --text-faint: #9a938c;
+  --border: rgba(28, 25, 23, 0.12);
+  --border-strong: rgba(28, 25, 23, 0.22);
+
+  --accent: #b4530a;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(180, 83, 10, 0.14);
+
+  --sentence-tint: rgba(180, 83, 10, 0.13);
+  --word-bg: #1c1917;
+  --word-text: #fafaf9;
+  --highlight-note: rgba(234, 179, 8, 0.28);
+  --highlight-underline: rgba(202, 138, 4, 0.75);
+
+  --shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.07);
+  --shadow-md: 0 4px 16px rgba(28, 25, 23, 0.1);
+  --shadow-lg: 0 12px 40px rgba(28, 25, 23, 0.16);
+}
+
+/* Dark: deep charcoal on web, per the spec (true black is the iOS target). */
+[data-theme='dark'] {
+  --bg: #121212;
+  --bg-raised: #1c1c1c;
+  --bg-sunken: #0b0b0b;
+  --bg-hover: rgba(255, 255, 255, 0.07);
+  --text: #ece9e6;
+  --text-muted: #a8a29d;
+  --text-faint: #6f6964;
+  --border: rgba(255, 255, 255, 0.13);
+  --border-strong: rgba(255, 255, 255, 0.26);
+
+  --accent: #f59e4b;
+  --accent-text: #1a1206;
+  --accent-soft: rgba(245, 158, 75, 0.18);
+
+  --sentence-tint: rgba(245, 158, 75, 0.15);
+  --word-bg: #f59e4b;
+  --word-text: #1a1206;
+  --highlight-note: rgba(250, 204, 21, 0.16);
+  --highlight-underline: rgba(250, 204, 21, 0.7);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.65);
+}
+
+/* Sepia: warm paper with deep espresso type. ------------------------------ */
+[data-theme='sepia'] {
+  --bg: #f4eedd;
+  --bg-raised: #fbf7ec;
+  --bg-sunken: #e9e1cc;
+  --bg-hover: rgba(67, 46, 27, 0.06);
+  --text: #432e1b;
+  --text-muted: #7a6046;
+  --text-faint: #a08a6f;
+  --border: rgba(67, 46, 27, 0.16);
+  --border-strong: rgba(67, 46, 27, 0.3);
+
+  --accent: #9a4c17;
+  --accent-text: #fbf7ec;
+  --accent-soft: rgba(154, 76, 23, 0.15);
+
+  --sentence-tint: rgba(154, 76, 23, 0.14);
+  --word-bg: #432e1b;
+  --word-text: #f4eedd;
+  --highlight-note: rgba(202, 138, 4, 0.26);
+  --highlight-underline: rgba(161, 98, 7, 0.8);
+
+  --shadow-sm: 0 1px 2px rgba(67, 46, 27, 0.1);
+  --shadow-md: 0 4px 16px rgba(67, 46, 27, 0.14);
+  --shadow-lg: 0 12px 40px rgba(67, 46, 27, 0.2);
+}
+
+/* Follow the OS unless the reader has chosen a theme explicitly. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #121212;
+    --bg-raised: #1c1c1c;
+    --bg-sunken: #0b0b0b;
+    --bg-hover: rgba(255, 255, 255, 0.07);
+    --text: #ece9e6;
+    --text-muted: #a8a29d;
+    --text-faint: #6f6964;
+    --border: rgba(255, 255, 255, 0.13);
+    --border-strong: rgba(255, 255, 255, 0.26);
+    --accent: #f59e4b;
+    --accent-text: #1a1206;
+    --accent-soft: rgba(245, 158, 75, 0.18);
+    --sentence-tint: rgba(245, 158, 75, 0.15);
+    --word-bg: #f59e4b;
+    --word-text: #1a1206;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.65);
+  }
+}
+
+/* Reading typeface presets, applied to the reader canvas only. */
+[data-reading-font='sans'] { --reading-font: var(--font-sans); }
+[data-reading-font='serif'] { --reading-font: var(--font-serif); --reading-leading: 1.8; }
+[data-reading-font='dyslexic'] {
+  --reading-font: var(--font-dyslexic);
+  /* OpenDyslexic is bottom-heavy and needs more room to stay legible. */
+  --reading-leading: 1.95;
+  --reading-tracking: 0.012em;
+}
