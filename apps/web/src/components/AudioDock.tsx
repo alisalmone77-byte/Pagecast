@@ -141,6 +141,8 @@ export function AudioDock({
             onOpenChange={setVoiceOpen}
             label={voices.find((v) => v.id === voiceId)?.label ?? 'Voice'}
             title="Voice"
+            icon={<WaveformIcon />}
+            collapsible
           >
             <div className="popover__title">Voice</div>
             <div className="voice__list">
@@ -174,12 +176,15 @@ function bufferedPercent(timeline: Timeline | null, durationMs: number): number 
 }
 
 function Popover({
-  open, onOpenChange, label, title, children,
+  open, onOpenChange, label, title, icon, collapsible = false, children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   label: string;
   title: string;
+  icon?: React.ReactNode;
+  /** Narrow screens show the icon alone; the label would not fit. */
+  collapsible?: boolean;
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -214,8 +219,12 @@ function Popover({
         aria-expanded={open}
         aria-haspopup="dialog"
         title={title}
+        aria-label={`${title}: ${label}`}
       >
-        {label}
+        {icon}
+        <span className={collapsible ? 'popover__label popover__label--collapsible' : 'popover__label'}>
+          {label}
+        </span>
       </button>
       {open && <div className="popover__panel" role="dialog" aria-label={title}>{children}</div>}
     </div>
@@ -252,6 +261,15 @@ function SkipIcon({ direction }: { direction: 'back' | 'forward' }) {
     </svg>
   );
 }
+function WaveformIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.9" strokeLinecap="round" aria-hidden="true">
+      <path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2" />
+    </svg>
+  );
+}
+
 function Spinner() {
   return <svg className="spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><circle cx="12" cy="12" r="9" opacity="0.25" /><path d="M21 12a9 9 0 0 0-9-9" strokeLinecap="round" /></svg>;
 }

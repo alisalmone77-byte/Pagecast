@@ -147,13 +147,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* --------------------------------------------------------------- layout */
 
+/*
+ * `minmax(0, 1fr)` rather than `1fr`.
+ *
+ * A bare `1fr` track has an automatic minimum: it refuses to shrink below the
+ * min-content width of what is inside it. On a phone the reader's header --
+ * a back button, a title and two actions, none of them wrapping -- set that
+ * minimum at 424px on a 393px screen, which pushed the whole column, and with
+ * it the playback dock, off the right edge. `overflow: hidden` here meant that
+ * showed up as controls that simply were not there, rather than a scrollbar.
+ */
 .workspace {
   display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
-.workspace--full { grid-template-columns: 1fr; }
+.workspace--full { grid-template-columns: minmax(0, 1fr); }
+.workspace > * { min-width: 0; }
 
 .sidebar {
   border-right: 1px solid var(--border);
@@ -196,7 +207,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 @media (max-width: 860px) {
-  .workspace { grid-template-columns: 1fr; }
+  .workspace { grid-template-columns: minmax(0, 1fr); }
   .sidebar { display: none; }
   .navbar { padding: 0 var(--space-4); }
 }

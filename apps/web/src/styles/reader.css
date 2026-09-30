@@ -109,7 +109,26 @@
 
 /* ------------------------------------------------------------------- reader */
 
-.reader { display: grid; grid-template-rows: auto auto 1fr auto; height: 100%; min-height: 0; }
+/*
+ * A flex column, not a grid with named rows.
+ *
+ * The reader has two optional children -- the hand-off banner and the reading
+ * settings panel -- so a fixed `grid-template-rows` mis-assigns every row when
+ * neither is present: the scrolling body landed in an `auto` row, grew to its
+ * full content height, and pushed the playback dock off the bottom of the
+ * screen entirely. A flex column does not care how many children there are.
+ *
+ * `min-width: 0` for the same reason as `.workspace`: without it the header's
+ * min-content width sets a floor the column cannot shrink below, and the dock
+ * runs off the right edge of a phone.
+ */
+.reader {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.reader > * { min-width: 0; flex-shrink: 0; }
 .reader--centered { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4); }
 
 .reader__bar {
@@ -142,8 +161,16 @@
 .field-row--check { gap: var(--space-2); }
 .field-row input[type='range'] { flex: 1; max-width: 240px; accent-color: var(--accent); }
 
-.reader__body { display: grid; grid-template-columns: 1fr; min-height: 0; overflow: hidden; }
-.reader__body--with-outline { grid-template-columns: 240px 1fr; }
+.reader__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* The one child that absorbs the leftover height. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.reader__body > * { min-width: 0; }
+.reader__body--with-outline { grid-template-columns: 240px minmax(0, 1fr); }
 
 .outline { border-right: 1px solid var(--border); overflow-y: auto; padding: var(--space-4) var(--space-2); }
 .outline__item {
@@ -378,12 +405,29 @@
   .library__controls { margin-left: 0; width: 100%; }
   .select, .select select { flex: 1; }
 
-  .reader__body--with-outline { grid-template-columns: 1fr; }
+  .reader__body--with-outline { grid-template-columns: minmax(0, 1fr); }
   .outline { display: none; }
   .reader__scroll { padding-inline: var(--space-4); }
   .dock { padding-inline: var(--space-4); }
-  .dock__time, .dock__settings { min-width: auto; }
   .library { padding-inline: var(--space-4); }
+
+  /*
+   * The dock is a single row of fixed-width groups. At 393px it overflowed by
+   * 100px, putting the speed and voice controls off the right edge -- where an
+   * ancestor's `overflow: hidden` clipped them silently instead of producing a
+   * scrollbar, so they were simply unreachable on a phone. Everything below
+   * exists to make that row fit: the groups may shrink, the voice name
+   * collapses to its icon, and the synthesis counter goes because the buffered
+   * bar behind the scrubber already shows the same thing.
+   */
+  .dock__row { gap: var(--space-2); }
+  .dock__time { min-width: 0; font-size: 11px; flex-shrink: 0; }
+  .dock__settings { min-width: 0; gap: var(--space-1); flex-shrink: 0; }
+  .dock__transport { gap: var(--space-1); min-width: 0; }
+  .dock__synthesis { display: none; }
+  .popover__trigger { padding-inline: var(--space-2); max-width: none; }
+  .popover__label--collapsible { display: none; }
+  .popover__panel { min-width: 200px; }
 }
 
 @media (max-width: 560px) {
@@ -518,3 +562,78 @@
 }
 .card[draggable='true'], .row[draggable='true'] { cursor: grab; }
 .card[draggable='true']:active, .row[draggable='true']:active { cursor: grabbing; }
+
+/* ------------------------------------------------- installed on a phone */
+
+/*
+ * Safe areas. Installed to an iPhone Home Screen the page runs edge to edge,
+ * so the dock would sit under the home indicator and the navbar under the
+ * notch. `viewport-fit=cover` in the viewport meta is what makes these
+ * env() values non-zero.
+ */
+.navbar { padding-top: env(safe-area-inset-top); }
+.app { height: 100dvh; }
+
+.dock {
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+  padding-left: calc(var(--space-5) + env(safe-area-inset-left));
+  padding-right: calc(var(--space-5) + env(safe-area-inset-right));
+}
+
+.reader__scroll {
+  padding-bottom: calc(var(--dock-height) + var(--space-8) + env(safe-area-inset-bottom));
+}
+
+.library { padding-bottom: calc(var(--space-8) + env(safe-area-inset-bottom)); }
+
+@media (max-width: 720px) {
+  .dock {
+    padding-left: calc(var(--space-4) + env(safe-area-inset-left));
+    padding-right: calc(var(--space-4) + env(safe-area-inset-right));
+  }
+}
+
+/*
+ * Touch targets. The pointer coarse query catches phones and tablets without
+ * penalising a desktop with a touchscreen, where the mouse is still primary.
+ */
+@media (pointer: coarse) {
+  .btn { min-height: 40px; }
+  .btn--icon { width: 42px; height: 42px; }
+  .dock__play { width: 54px; height: 54px; }
+  /* A 22px strip is hard to hit while walking. */
+  .dock__scrubber { height: 34px; }
+  .dock__scrubber input[type='range'] { height: 34px; }
+  .card__actions { opacity: 1; }
+  .sidebar__folder-actions { display: flex; }
+  .canvas .token:hover:not(.token--active) { background: none; }
+}
+
+/*
+ * iOS zooms the whole page in when a field smaller than 16px takes focus, and
+ * does not zoom back out. Applied on any coarse pointer rather than behind a
+ * WebKit-only `@supports` probe, which is untestable anywhere else and would
+ * fail silently if it ever stopped matching.
+ */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: max(16px, 1em); }
+}
+
+.install-hint {
+  display: flex; align-items: center; gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  font-size: 13px; color: var(--text-muted);
+}
+.install-hint strong { color: var(--text); font-weight: 600; }
+.install-hint button {
+  margin-left: auto; border: 0; background: none; cursor: pointer;
+  color: var(--text-faint); font-size: 18px; line-height: 1; padding: var(--space-1);
+}
+
+.main__hint { max-width: 1140px; margin: 0 auto; padding: var(--space-5) var(--space-5) 0; }
+.main__hint:empty { display: none; }
+@media (max-width: 720px) { .main__hint { padding-inline: var(--space-4); } }

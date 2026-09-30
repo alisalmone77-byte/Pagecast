@@ -3,6 +3,7 @@ import { progressAt, type ReadingPosition } from '@pagecast/core';
 import { api } from '../api/client.js';
 import { AudioDock } from '../components/AudioDock.js';
 import { ReaderCanvas } from '../components/ReaderCanvas.js';
+import { attachMediaSession } from '../player/mediaSession.js';
 import { useKaraoke } from '../player/useKaraoke.js';
 import { useReader } from '../state/useReader.js';
 import type { Settings } from '../state/settings.js';
@@ -34,6 +35,22 @@ export function Reader({ documentId, settings, onBack, onUpdateSetting }: Reader
   });
 
   const { toggle, skip, skipSentence, setSpeed, player } = reader;
+
+  /* Lock screen, headset buttons and the system now-playing panel. */
+  useEffect(() => {
+    const meta = reader.document?.meta;
+    if (!meta) return;
+    return attachMediaSession(
+      reader.engine,
+      { title: meta.title, author: meta.author },
+      {
+        play: reader.play,
+        pause: reader.pause,
+        skip: reader.skip,
+        seekTo: reader.seekToMs,
+      },
+    );
+  }, [reader.document?.meta, reader.engine, reader.play, reader.pause, reader.skip, reader.seekToMs]);
 
   /* Keyboard shortcuts, per the spec: space, J/L, arrows. */
   useEffect(() => {

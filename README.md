@@ -34,6 +34,10 @@ npm test              # 165 unit and integration tests, plus the iOS contract ch
 npm run typecheck     # all three TypeScript workspaces
 ```
 
+**On a phone:** the web client installs to an iPhone Home Screen and runs
+full-screen. See [docs/running-on-your-phone.md](docs/running-on-your-phone.md)
+— about five minutes, and no Mac needed.
+
 ## The one idea worth explaining
 
 **A reading position is a word, never a timestamp.**
@@ -184,6 +188,7 @@ returning `marks`; one that doesn't falls back to the fitted estimate.
 | `PAGECAST_ALLOW_REGISTRATION` | `true` | Set `false` once your accounts exist |
 | `PAGECAST_INVITE_CODE` | — | When set, sign-up also requires this code |
 | `PAGECAST_SECURE_COOKIES` | `false` | **Set `true` behind HTTPS** |
+| `PAGECAST_HOST` | `0.0.0.0` | Listens on the LAN, so a phone can reach it |
 
 `PAGECAST_SECURE_COOKIES` must be on in production and off for a plain-http
 development server: with `Secure` set over http the browser silently drops the

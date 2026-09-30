@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content="Pagecast turns any written text into high-fidelity audio with word-by-word visual tracking." />
     <meta name="color-scheme" content="light dark" />
+
+    <!-- Installed to the Home Screen, this runs without Safari's chrome. The
+         theme colour is matched per scheme so the status bar blends into the
+         page rather than sitting on a white strip in dark mode. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Pagecast" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#FAFAF9" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
     <title>Pagecast</title>
     <!-- Inline so there is no second request, and no stray 404 when a
          navigation asks for /favicon.ico. -->

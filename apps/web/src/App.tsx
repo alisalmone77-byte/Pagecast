@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FolderTree } from './components/FolderTree.js';
+import { InstallHint } from './components/InstallHint.js';
 import { IngestModal } from './components/IngestModal.js';
 import { Library, type LibraryFilter } from './screens/Library.js';
 import { Reader } from './screens/Reader.js';
@@ -7,6 +8,7 @@ import { SignIn } from './screens/SignIn.js';
 import { useSettings } from './state/settings.js';
 import { syncChannel } from './api/sync.js';
 import { api, onSignedOut, type FolderWithCounts, type PublicUser } from './api/client.js';
+import { clearCachedAudio } from './pwa.js';
 
 /**
  * Routing is a single path segment -- `/` for the library, `/d/<id>` for a
@@ -68,6 +70,8 @@ export function App() {
       setUser(null);
       setDocumentId(null);
       setFolders([]);
+      // The cached audio is the previous reader's; it must not survive them.
+      clearCachedAudio();
       history.pushState(null, '', '/');
     }
   }, []);
@@ -214,6 +218,7 @@ export function App() {
           </aside>
 
           <main className="main">
+            <div className="main__hint"><InstallHint /></div>
             <Library
               search={search}
               filter={filter}
