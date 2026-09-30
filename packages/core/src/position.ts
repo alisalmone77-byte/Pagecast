@@ -50,11 +50,19 @@ export function fromGlobalWordIndex(content: DocumentContent, globalIndex: numbe
   return { blockIndex: last.index, tokenIndex: Math.max(0, last.tokens.length - 1) };
 }
 
-/** Fraction of the document read, 0..1. */
+/**
+ * Fraction of the document read, 0..1.
+ *
+ * The denominator is the number of *gaps* between words, not the word count,
+ * so the first word reads 0 and the last word reads exactly 1. Dividing by the
+ * word count instead would leave a reader who has reached the final word of a
+ * 24-word document sitting at 96%, and a document that can never be finished
+ * never leaves the "continue listening" shelf.
+ */
 export function progressAt(content: DocumentContent, position: ReadingPosition): number {
   const total = blockWordOffsets(content)[content.blocks.length] ?? 0;
-  if (total === 0) return 0;
-  return Math.min(1, Math.max(0, toGlobalWordIndex(content, position) / total));
+  if (total <= 1) return 0;
+  return Math.min(1, Math.max(0, toGlobalWordIndex(content, position) / (total - 1)));
 }
 
 /** Index of the sentence containing `position`, or -1 if the document is empty. */

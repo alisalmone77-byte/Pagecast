@@ -1,0 +1,160 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { config } from './config.js';
+
+/** Minimal routing layer. Patterns use `:name` for a path segment. */
+export interface RouteContext {
+  readonly req: IncomingMessage;
+  readonly res: ServerResponse;
+  readonly params: Record<string, string>;
+  readonly query: URLSearchParams;
+  readonly url: URL;
+  /** Identifies the reader. A real deployment replaces this with a session. */
+  readonly userId: string;
+  /** Identifies the device, so a client can ignore the echo of its own write. */
+  readonly deviceId: string;
+}
+
+export type Handler = (ctx: RouteContext) => Promise<void> | void;
+
+interface Route {
+  method: string;
+  segments: string[];
+  handler: Handler;
+}
+
+export class HttpError extends Error {
+  constructor(readonly status: number, message: string, readonly detail?: unknown) {
+    super(message);
+    this.name = 'HttpError';
+  }
+}
+
+export class Router {
+  private readonly routes: Route[] = [];
+
+  add(method: string, pattern: string, handler: Handler): this {
+    this.routes.push({ method, segments: pattern.split('/').filter(Boolean), handler });
+    return this;
+  }
+
+  get(pattern: string, handler: Handler) { return this.add('GET', pattern, handler); }
+  post(pattern: string, handler: Handler) { return this.add('POST', pattern, handler); }
+  put(pattern: string, handler: Handler) { return this.add('PUT', pattern, handler); }
+  patch(pattern: string, handler: Handler) { return this.add('PATCH', pattern, handler); }
+  delete(pattern: string, handler: Handler) { return this.add('DELETE', pattern, handler); }
+
+  /** Returns false when nothing matched, so the caller can fall through to static files. */
+  async handle(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+    const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+
+    let methodMismatch = false;
+    for (const route of this.routes) {
+      const params = match(route.segments, parts);
+      if (params === null) continue;
+      if (route.method !== req.method) { methodMismatch = true; continue; }
+
+      const ctx: RouteContext = {
+        req, res, params, url,
+        query: url.searchParams,
+        userId: headerOr(req, 'x-pagecast-user', 'local'),
+        deviceId: headerOr(req, 'x-pagecast-device', 'unknown'),
+      };
+      await route.handler(ctx);
+      return true;
+    }
+    if (methodMismatch) throw new HttpError(405, `method ${req.method} not allowed for ${url.pathname}`);
+    return false;
+  }
+}
+
+function match(pattern: string[], parts: string[]): Record<string, string> | null {
+  // A trailing `*` captures the remainder of the path.
+  const wildcard = pattern[pattern.length - 1] === '*';
+  if (!wildcard && pattern.length !== parts.length) return null;
+  if (wildcard && parts.length < pattern.length - 1) return null;
+
+  const params: Record<string, string> = {};
+  for (let i = 0; i < pattern.length; i += 1) {
+    const seg = pattern[i]!;
+    if (seg === '*') {
+      params['rest'] = parts.slice(i).join('/');
+      return params;
+    }
+    const part = parts[i];
+    if (part === undefined) return null;
+    if (seg.startsWith(':')) params[seg.slice(1)] = part;
+    else if (seg !== part) return null;
+  }
+  return params;
+}
+
+function headerOr(req: IncomingMessage, name: string, fallback: string): string {
+  const raw = req.headers[name];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value && value.trim().length > 0 ? value.trim() : fallback;
+}
+
+/* ------------------------------------------------------------- responses */
+
+export function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  const payload = JSON.stringify(body);
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': Buffer.byteLength(payload),
+    'cache-control': 'no-store',
+  });
+  res.end(payload);
+}
+
+export function sendError(res: ServerResponse, err: unknown): void {
+  if (err instanceof HttpError) {
+    sendJson(res, err.status, { error: err.message, detail: err.detail ?? null });
+    return;
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  console.error('[api] unhandled error:', err);
+  sendJson(res, 500, { error: 'internal error', detail: message });
+}
+
+/* ------------------------------------------------------------ request body */
+
+/** Read the whole request body, refusing anything over the configured limit. */
+export async function readBody(req: IncomingMessage, limit = config.maxUploadBytes): Promise<Buffer> {
+  const declared = Number(req.headers['content-length'] ?? '0');
+  if (Number.isFinite(declared) && declared > limit) {
+    throw new HttpError(413, `body of ${declared} bytes exceeds the ${limit} byte limit`);
+  }
+
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of req) {
+    const buf = chunk as Buffer;
+    total += buf.length;
+    if (total > limit) throw new HttpError(413, `body exceeds the ${limit} byte limit`);
+    chunks.push(buf);
+  }
+  return Buffer.concat(chunks);
+}
+
+export async function readJson<T>(req: IncomingMessage): Promise<T> {
+  const raw = await readBody(req);
+  if (raw.length === 0) throw new HttpError(400, 'expected a JSON body');
+  try {
+    return JSON.parse(raw.toString('utf8')) as T;
+  } catch {
+    throw new HttpError(400, 'body is not valid JSON');
+  }
+}
+
+/** CORS for the Vite dev server and the iOS simulator. */
+export function applyCors(req: IncomingMessage, res: ServerResponse): void {
+  res.setHeader('access-control-allow-origin', req.headers.origin ?? '*');
+  res.setHeader('vary', 'origin');
+  res.setHeader('access-control-allow-methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader(
+    'access-control-allow-headers',
+    'content-type,x-pagecast-user,x-pagecast-device,x-pagecast-filename,x-pagecast-title',
+  );
+  res.setHeader('access-control-max-age', '86400');
+}

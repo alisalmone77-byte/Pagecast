@@ -1,0 +1,16 @@
+{
+  "name": "@pagecast/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput & node --watch dist/server.js",
+    "start": "node dist/server.js",
+    "test": "npm run build && node --test \"test/*.test.js\""
+  },
+  "dependencies": { "@pagecast/core": "*", "pdfjs-dist": "^4.8.69" },
+  "devDependencies": { "typescript": "^5.6.0", "@types/node": "^22.7.0" }
+}
