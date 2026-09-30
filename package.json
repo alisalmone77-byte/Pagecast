@@ -5,14 +5,21 @@
   "description": "AI-driven assistive reading platform: any text, high-fidelity audio, word-level visual sync.",
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=20.11" },
-  "workspaces": ["packages/*", "apps/api", "apps/web"],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/api",
+    "apps/web"
+  ],
   "scripts": {
     "build": "npm run build -w @pagecast/core && npm run build -w @pagecast/api && npm run build -w @pagecast/web",
-    "test": "npm run test -w @pagecast/core && npm run test -w @pagecast/api",
+    "test": "npm run test -w @pagecast/core && npm run test -w @pagecast/api && npm run test:ios-contract",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "dev": "npm run dev -w @pagecast/api & npm run dev -w @pagecast/web",
     "dev:api": "npm run dev -w @pagecast/api",
-    "dev:web": "npm run dev -w @pagecast/web"
+    "dev:web": "npm run dev -w @pagecast/web",
+    "test:ios-contract": "python3 apps/ios/PagecastTests/Support/verify_fixtures.py"
   }
 }

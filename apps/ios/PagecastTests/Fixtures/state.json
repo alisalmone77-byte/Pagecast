@@ -1,0 +1,15 @@
+{
+    "state": {
+        "documentId": "9e6fcd91-05ac-4271-936e-427bbe8d6a89",
+        "position": {
+            "blockIndex": 1,
+            "tokenIndex": 0
+        },
+        "progress": 0.041666666666666664,
+        "speed": 1,
+        "voiceId": "local-clara",
+        "rev": 11,
+        "updatedAt": "2026-09-30T10:06:11.163Z",
+        "deviceId": "web-fd1508a8"
+    }
+}

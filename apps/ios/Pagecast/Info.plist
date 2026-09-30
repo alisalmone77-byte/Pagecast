@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDisplayName</key>
+  <string>Pagecast</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+
+  <!-- Playback continues when the screen locks; the whole point is listening
+       while doing something else. -->
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>audio</string>
+    <string>fetch</string>
+  </array>
+
+  <key>NSCameraUsageDescription</key>
+  <string>Pagecast uses the camera to scan printed pages so they can be read aloud.</string>
+
+  <!-- The share extension opens the app on this scheme. -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>com.pagecast.app</string>
+      <key>CFBundleURLSchemes</key>
+      <array><string>pagecast</string></array>
+    </dict>
+  </array>
+
+  <!-- Where the API lives. Set this per build configuration. -->
+  <key>PAGECAST_API_BASE</key>
+  <string>http://localhost:8787</string>
+
+  <!-- Only needed while pointing at a local development server over http;
+       a production build talks to https and should drop this key entirely. -->
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key>
+    <true/>
+  </dict>
+
+  <key>UILaunchScreen</key>
+  <dict/>
+  <key>UISupportedInterfaceOrientations</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+</dict>
+</plist>

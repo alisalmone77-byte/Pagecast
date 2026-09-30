@@ -1,0 +1,28 @@
+{
+    "voices": [
+        {
+            "id": "local-clara",
+            "label": "Clara (offline)",
+            "accent": "British English",
+            "gender": "female",
+            "provider": "local",
+            "baseWpm": 168
+        },
+        {
+            "id": "local-miles",
+            "label": "Miles (offline)",
+            "accent": "American English",
+            "gender": "male",
+            "provider": "local",
+            "baseWpm": 160
+        },
+        {
+            "id": "local-nova",
+            "label": "Nova (offline)",
+            "accent": "Neutral",
+            "gender": "neutral",
+            "provider": "local",
+            "baseWpm": 175
+        }
+    ]
+}

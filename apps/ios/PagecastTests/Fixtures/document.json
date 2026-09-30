@@ -1,0 +1,727 @@
+{
+    "meta": {
+        "id": "9e6fcd91-05ac-4271-936e-427bbe8d6a89",
+        "title": "Deep Work, Chapter 4",
+        "sourceKind": "paste",
+        "createdAt": "2026-09-30T09:55:34.246Z",
+        "updatedAt": "2026-09-30T09:56:15.437Z",
+        "wordCount": 97,
+        "blockCount": 6,
+        "audioState": "ready",
+        "folderId": null,
+        "bookmarked": false
+    },
+    "content": {
+        "blocks": [
+            {
+                "index": 0,
+                "type": "heading1",
+                "text": "Rule One: Work Deeply",
+                "tokens": [
+                    {
+                        "i": 0,
+                        "text": "Rule",
+                        "start": 0,
+                        "end": 4
+                    },
+                    {
+                        "i": 1,
+                        "text": "One",
+                        "start": 5,
+                        "end": 8
+                    },
+                    {
+                        "i": 2,
+                        "text": "Work",
+                        "start": 10,
+                        "end": 14
+                    },
+                    {
+                        "i": 3,
+                        "text": "Deeply",
+                        "start": 15,
+                        "end": 21
+                    }
+                ]
+            },
+            {
+                "index": 1,
+                "type": "paragraph",
+                "text": "The ability to concentrate without distraction is becoming increasingly rare. At the same time, it is becoming increasingly valuable in our economy.",
+                "tokens": [
+                    {
+                        "i": 0,
+                        "text": "The",
+                        "start": 0,
+                        "end": 3
+                    },
+                    {
+                        "i": 1,
+                        "text": "ability",
+                        "start": 4,
+                        "end": 11
+                    },
+                    {
+                        "i": 2,
+                        "text": "to",
+                        "start": 12,
+                        "end": 14
+                    },
+                    {
+                        "i": 3,
+                        "text": "concentrate",
+                        "start": 15,
+                        "end": 26
+                    },
+                    {
+                        "i": 4,
+                        "text": "without",
+                        "start": 27,
+                        "end": 34
+                    },
+                    {
+                        "i": 5,
+                        "text": "distraction",
+                        "start": 35,
+                        "end": 46
+                    },
+                    {
+                        "i": 6,
+                        "text": "is",
+                        "start": 47,
+                        "end": 49
+                    },
+                    {
+                        "i": 7,
+                        "text": "becoming",
+                        "start": 50,
+                        "end": 58
+                    },
+                    {
+                        "i": 8,
+                        "text": "increasingly",
+                        "start": 59,
+                        "end": 71
+                    },
+                    {
+                        "i": 9,
+                        "text": "rare",
+                        "start": 72,
+                        "end": 76
+                    },
+                    {
+                        "i": 10,
+                        "text": "At",
+                        "start": 78,
+                        "end": 80
+                    },
+                    {
+                        "i": 11,
+                        "text": "the",
+                        "start": 81,
+                        "end": 84
+                    },
+                    {
+                        "i": 12,
+                        "text": "same",
+                        "start": 85,
+                        "end": 89
+                    },
+                    {
+                        "i": 13,
+                        "text": "time",
+                        "start": 90,
+                        "end": 94
+                    },
+                    {
+                        "i": 14,
+                        "text": "it",
+                        "start": 96,
+                        "end": 98
+                    },
+                    {
+                        "i": 15,
+                        "text": "is",
+                        "start": 99,
+                        "end": 101
+                    },
+                    {
+                        "i": 16,
+                        "text": "becoming",
+                        "start": 102,
+                        "end": 110
+                    },
+                    {
+                        "i": 17,
+                        "text": "increasingly",
+                        "start": 111,
+                        "end": 123
+                    },
+                    {
+                        "i": 18,
+                        "text": "valuable",
+                        "start": 124,
+                        "end": 132
+                    },
+                    {
+                        "i": 19,
+                        "text": "in",
+                        "start": 133,
+                        "end": 135
+                    },
+                    {
+                        "i": 20,
+                        "text": "our",
+                        "start": 136,
+                        "end": 139
+                    },
+                    {
+                        "i": 21,
+                        "text": "economy",
+                        "start": 140,
+                        "end": 147
+                    }
+                ]
+            },
+            {
+                "index": 2,
+                "type": "paragraph",
+                "text": "Those two trends together produce a clear opportunity. Cultivating focus deliberately is itself the work, and it compounds over months.",
+                "tokens": [
+                    {
+                        "i": 0,
+                        "text": "Those",
+                        "start": 0,
+                        "end": 5
+                    },
+                    {
+                        "i": 1,
+                        "text": "two",
+                        "start": 6,
+                        "end": 9
+                    },
+                    {
+                        "i": 2,
+                        "text": "trends",
+                        "start": 10,
+                        "end": 16
+                    },
+                    {
+                        "i": 3,
+                        "text": "together",
+                        "start": 17,
+                        "end": 25
+                    },
+                    {
+                        "i": 4,
+                        "text": "produce",
+                        "start": 26,
+                        "end": 33
+                    },
+                    {
+                        "i": 5,
+                        "text": "a",
+                        "start": 34,
+                        "end": 35
+                    },
+                    {
+                        "i": 6,
+                        "text": "clear",
+                        "start": 36,
+                        "end": 41
+                    },
+                    {
+                        "i": 7,
+                        "text": "opportunity",
+                        "start": 42,
+                        "end": 53
+                    },
+                    {
+                        "i": 8,
+                        "text": "Cultivating",
+                        "start": 55,
+                        "end": 66
+                    },
+                    {
+                        "i": 9,
+                        "text": "focus",
+                        "start": 67,
+                        "end": 72
+                    },
+                    {
+                        "i": 10,
+                        "text": "deliberately",
+                        "start": 73,
+                        "end": 85
+                    },
+                    {
+                        "i": 11,
+                        "text": "is",
+                        "start": 86,
+                        "end": 88
+                    },
+                    {
+                        "i": 12,
+                        "text": "itself",
+                        "start": 89,
+                        "end": 95
+                    },
+                    {
+                        "i": 13,
+                        "text": "the",
+                        "start": 96,
+                        "end": 99
+                    },
+                    {
+                        "i": 14,
+                        "text": "work",
+                        "start": 100,
+                        "end": 104
+                    },
+                    {
+                        "i": 15,
+                        "text": "and",
+                        "start": 106,
+                        "end": 109
+                    },
+                    {
+                        "i": 16,
+                        "text": "it",
+                        "start": 110,
+                        "end": 112
+                    },
+                    {
+                        "i": 17,
+                        "text": "compounds",
+                        "start": 113,
+                        "end": 122
+                    },
+                    {
+                        "i": 18,
+                        "text": "over",
+                        "start": 123,
+                        "end": 127
+                    },
+                    {
+                        "i": 19,
+                        "text": "months",
+                        "start": 128,
+                        "end": 134
+                    }
+                ]
+            },
+            {
+                "index": 3,
+                "type": "heading2",
+                "text": "The Attention Residue Effect",
+                "tokens": [
+                    {
+                        "i": 0,
+                        "text": "The",
+                        "start": 0,
+                        "end": 3
+                    },
+                    {
+                        "i": 1,
+                        "text": "Attention",
+                        "start": 4,
+                        "end": 13
+                    },
+                    {
+                        "i": 2,
+                        "text": "Residue",
+                        "start": 14,
+                        "end": 21
+                    },
+                    {
+                        "i": 3,
+                        "text": "Effect",
+                        "start": 22,
+                        "end": 28
+                    }
+                ]
+            },
+            {
+                "index": 4,
+                "type": "paragraph",
+                "text": "Each shift in attention leaves a residue behind. That residue degrades the quality of whatever follows it, and the cost is invisible precisely because it is diffuse.",
+                "tokens": [
+                    {
+                        "i": 0,
+                        "text": "Each",
+                        "start": 0,
+                        "end": 4
+                    },
+                    {
+                        "i": 1,
+                        "text": "shift",
+                        "start": 5,
+                        "end": 10
+                    },
+                    {
+                        "i": 2,
+                        "text": "in",
+                        "start": 11,
+                        "end": 13
+                    },
+                    {
+                        "i": 3,
+                        "text": "attention",
+                        "start": 14,
+                        "end": 23
+                    },
+                    {
+                        "i": 4,
+                        "text": "leaves",
+                        "start": 24,
+                        "end": 30
+                    },
+                    {
+                        "i": 5,
+                        "text": "a",
+                        "start": 31,
+                        "end": 32
+                    },
+                    {
+                        "i": 6,
+                        "text": "residue",
+                        "start": 33,
+                        "end": 40
+                    },
+                    {
+                        "i": 7,
+                        "text": "behind",
+                        "start": 41,
+                        "end": 47
+                    },
+                    {
+                        "i": 8,
+                        "text": "That",
+                        "start": 49,
+                        "end": 53
+                    },
+                    {
+                        "i": 9,
+                        "text": "residue",
+                        "start": 54,
+                        "end": 61
+                    },
+                    {
+                        "i": 10,
+                        "text": "degrades",
+                        "start": 62,
+                        "end": 70
+                    },
+                    {
+                        "i": 11,
+                        "text": "the",
+                        "start": 71,
+                        "end": 74
+                    },
+                    {
+                        "i": 12,
+                        "text": "quality",
+                        "start": 75,
+                        "end": 82
+                    },
+                    {
+                        "i": 13,
+                        "text": "of",
+                        "start": 83,
+                        "end": 85
+                    },
+                    {
+                        "i": 14,
+                        "text": "whatever",
+                        "start": 86,
+                        "end": 94
+                    },
+                    {
+                        "i": 15,
+                        "text": "follows",
+                        "start": 95,
+                        "end": 102
+                    },
+                    {
+                        "i": 16,
+                        "text": "it",
+                        "start": 103,
+                        "end": 105
+                    },
+                    {
+                        "i": 17,
+                        "text": "and",
+                        "start": 107,
+                        "end": 110
+                    },
+                    {
+                        "i": 18,
+                        "text": "the",
+                        "start": 111,
+                        "end": 114
+                    },
+                    {
+                        "i": 19,
+                        "text": "cost",
+                        "start": 115,
+                        "end": 119
+                    },
+                    {
+                        "i": 20,
+                        "text": "is",
+                        "start": 120,
+                        "end": 122
+                    },
+                    {
+                        "i": 21,
+                        "text": "invisible",
+                        "start": 123,
+                        "end": 132
+                    },
+                    {
+                        "i": 22,
+                        "text": "precisely",
+                        "start": 133,
+                        "end": 142
+                    },
+                    {
+                        "i": 23,
+                        "text": "because",
+                        "start": 143,
+                        "end": 150
+                    },
+                    {
+                        "i": 24,
+                        "text": "it",
+                        "start": 151,
+                        "end": 153
+                    },
+                    {
+                        "i": 25,
+                        "text": "is",
+                        "start": 154,
+                        "end": 156
+                    },
+                    {
+                        "i": 26,
+                        "text": "diffuse",
+                        "start": 157,
+                        "end": 164
+                    }
+                ]
+            },
+            {
+                "index": 5,
+                "type": "paragraph",
+                "text": "Professor Sophie Leroy first described this in 2009. Her finding was that switching tasks, even briefly, carries a measurable penalty.",
+                "tokens": [
+                    {
+                        "i": 0,
+                        "text": "Professor",
+                        "start": 0,
+                        "end": 9
+                    },
+                    {
+                        "i": 1,
+                        "text": "Sophie",
+                        "start": 10,
+                        "end": 16
+                    },
+                    {
+                        "i": 2,
+                        "text": "Leroy",
+                        "start": 17,
+                        "end": 22
+                    },
+                    {
+                        "i": 3,
+                        "text": "first",
+                        "start": 23,
+                        "end": 28
+                    },
+                    {
+                        "i": 4,
+                        "text": "described",
+                        "start": 29,
+                        "end": 38
+                    },
+                    {
+                        "i": 5,
+                        "text": "this",
+                        "start": 39,
+                        "end": 43
+                    },
+                    {
+                        "i": 6,
+                        "text": "in",
+                        "start": 44,
+                        "end": 46
+                    },
+                    {
+                        "i": 7,
+                        "text": "2009",
+                        "start": 47,
+                        "end": 51
+                    },
+                    {
+                        "i": 8,
+                        "text": "Her",
+                        "start": 53,
+                        "end": 56
+                    },
+                    {
+                        "i": 9,
+                        "text": "finding",
+                        "start": 57,
+                        "end": 64
+                    },
+                    {
+                        "i": 10,
+                        "text": "was",
+                        "start": 65,
+                        "end": 68
+                    },
+                    {
+                        "i": 11,
+                        "text": "that",
+                        "start": 69,
+                        "end": 73
+                    },
+                    {
+                        "i": 12,
+                        "text": "switching",
+                        "start": 74,
+                        "end": 83
+                    },
+                    {
+                        "i": 13,
+                        "text": "tasks",
+                        "start": 84,
+                        "end": 89
+                    },
+                    {
+                        "i": 14,
+                        "text": "even",
+                        "start": 91,
+                        "end": 95
+                    },
+                    {
+                        "i": 15,
+                        "text": "briefly",
+                        "start": 96,
+                        "end": 103
+                    },
+                    {
+                        "i": 16,
+                        "text": "carries",
+                        "start": 105,
+                        "end": 112
+                    },
+                    {
+                        "i": 17,
+                        "text": "a",
+                        "start": 113,
+                        "end": 114
+                    },
+                    {
+                        "i": 18,
+                        "text": "measurable",
+                        "start": 115,
+                        "end": 125
+                    },
+                    {
+                        "i": 19,
+                        "text": "penalty",
+                        "start": 126,
+                        "end": 133
+                    }
+                ]
+            }
+        ],
+        "sentences": [
+            {
+                "index": 0,
+                "blockIndex": 0,
+                "startToken": 0,
+                "endToken": 4
+            },
+            {
+                "index": 1,
+                "blockIndex": 1,
+                "startToken": 0,
+                "endToken": 10
+            },
+            {
+                "index": 2,
+                "blockIndex": 1,
+                "startToken": 10,
+                "endToken": 22
+            },
+            {
+                "index": 3,
+                "blockIndex": 2,
+                "startToken": 0,
+                "endToken": 8
+            },
+            {
+                "index": 4,
+                "blockIndex": 2,
+                "startToken": 8,
+                "endToken": 20
+            },
+            {
+                "index": 5,
+                "blockIndex": 3,
+                "startToken": 0,
+                "endToken": 4
+            },
+            {
+                "index": 6,
+                "blockIndex": 4,
+                "startToken": 0,
+                "endToken": 8
+            },
+            {
+                "index": 7,
+                "blockIndex": 4,
+                "startToken": 8,
+                "endToken": 27
+            },
+            {
+                "index": 8,
+                "blockIndex": 5,
+                "startToken": 0,
+                "endToken": 8
+            },
+            {
+                "index": 9,
+                "blockIndex": 5,
+                "startToken": 8,
+                "endToken": 20
+            }
+        ]
+    },
+    "state": {
+        "documentId": "9e6fcd91-05ac-4271-936e-427bbe8d6a89",
+        "position": {
+            "blockIndex": 1,
+            "tokenIndex": 0
+        },
+        "progress": 0.041666666666666664,
+        "speed": 1,
+        "voiceId": "local-clara",
+        "rev": 11,
+        "updatedAt": "2026-09-30T10:06:11.163Z",
+        "deviceId": "web-fd1508a8"
+    },
+    "highlights": [
+        {
+            "id": "cd7a583b-c00f-401d-b40a-add02d1f534f",
+            "documentId": "9e6fcd91-05ac-4271-936e-427bbe8d6a89",
+            "blockIndex": 1,
+            "startToken": 0,
+            "endToken": 4,
+            "createdAt": "2026-09-30T10:04:06.084Z"
+        }
+    ]
+}
